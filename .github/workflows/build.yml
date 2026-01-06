@@ -43,5 +43,19 @@ jobs:
           path: |
             Lecture_Notes/main.pdf
             Slides/Week_01/lecture1.pdf
-            Slides/Week_02/lecture2.pdf
           retention-days: 30
+
+      - name: Rename PDF
+        if: success()
+        run: cp Lecture_Notes/main.pdf "COMP0263 Lecture Notes 2026.pdf"
+
+      - name: Upload to Release
+        if: success()
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "COMP0263 Lecture Notes 2026.pdf"
+          tag_name: latest
+          generate_release_notes: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
