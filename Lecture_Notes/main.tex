@@ -1,0 +1,122 @@
+\documentclass[11pt, a4paper]{book}
+
+% --- UNIVERSAL PREAMBLE BLOCK ---
+\usepackage[
+    a4paper,
+    left=3cm,
+    top=2cm,
+    right=1.75cm,
+    bottom=1.5cm,
+    headheight=15pt, 
+    headsep=1.25cm,
+    footskip=1.25cm
+]{geometry}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+
+\usepackage{enumitem}
+\setlist[itemize]{label=-}
+\setlist[enumerate,1]{label=(\alph*)}
+\setlist[enumerate,2]{label=(\roman*)}
+
+% --- PACKAGES FROM USER REQUEST ---
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{csquotes}
+\usepackage{graphicx}
+
+% --- PAGE STYLE ---
+\setlength{\headheight}{15pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE, RO]{\sffamily\thepage}
+\fancyhead[LO]{\sffamily\leftmark}
+\fancyhead[RE]{\sffamily\rightmark}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% --- THEOREM DEFINITIONS ---
+\theoremstyle{plain}
+\newtheorem{defi}{Definition}[chapter]
+\newtheorem{thm}{Theorem}[chapter]
+\newtheorem{lem}{Lemma}[chapter]
+\newtheorem{cor}{Corollary}[chapter]
+\newtheorem{prob}{Problem}[chapter]
+\newtheorem{prop}{Proposition}[chapter]
+\newtheorem{alg}{Algorithm}[chapter]
+\newtheorem{supment}{Supplement}[chapter]
+\newtheorem{assumption}{Assumption}[chapter]
+
+\theoremstyle{definition}
+\newtheorem{rem}{Remark}[chapter]
+\newtheorem{exm}{Example}[chapter]
+
+% --- CUSTOM COMMANDS ---
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+
+% Critical Operators
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+% --- HYPERREF (Must be last) ---
+\usepackage[bookmarks, hyperindex, colorlinks, citecolor=black, linkcolor=black, urlcolor=black, filecolor=black, menucolor=black]{hyperref}
+
+% --- LICENSE ---
+\usepackage[
+    type={CC},
+    modifier={by-nc-sa},
+    version={3.0},
+]{doclicense}
+
+\begin{document}
+
+\begin{titlepage}
+\begin{center}
+
+% Title
+\HRule \\[0.5cm]
+{ \huge \bfseries COMP0263 - Solving Inverse Problems with Data-Driven Models}
+\HRule \\[2.5cm]
+
+% Author
+{\Large Prof. Martin Benning\\}
+
+\vspace{1.5cm}
+
+{Last updated on: \today}
+
+\vfill
+
+% Bottom of the page
+{\large Lecture Notes\\
+Second term 2025/26}
+
+\end{center}
+
+\vspace*{4cm}
+
+\doclicenseThis
+
+\end{titlepage}
+
+\tableofcontents
+
+\vspace{1cm}
+
+\noindent These lecture notes are under constant redevelopment and will likely contain errors and mistakes. We very much appreciate the finding and reporting of those! Please report any typos, errors, or suggestions via \href{https://github.com/UCL-COMP0263-2026/Course-Materials/issues}{GitHub Issues} or submit corrections directly as a \href{https://github.com/UCL-COMP0263-2026/Course-Materials/pulls}{Pull Request}. See \href{https://github.com/UCL-COMP0263-2026/Course-Materials/blob/main/CONTRIBUTING.md}{CONTRIBUTING.md} for details on how to contribute.
+
+\input{chapters/01_intro.tex}
+
+\bibliography{references}
+\bibliographystyle{plain}
+
+\end{document}

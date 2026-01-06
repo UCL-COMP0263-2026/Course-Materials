@@ -1,0 +1,52 @@
+name: Build LaTeX Documents
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.tex'
+      - '**.sty'
+      - 'Common_Images/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**.tex'
+      - '**.sty'
+      - 'Common_Images/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Compile Lecture Notes
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: Lecture_Notes/main.tex
+          working_directory: Lecture_Notes
+
+      - name: Compile Slides (Week 01)
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: lecture1.tex
+          working_directory: Slides/Week_01
+
+      - name: Compile Slides (Week 02)
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: lecture2.tex
+          working_directory: Slides/Week_02
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: compiled-pdfs
+          path: |
+            Lecture_Notes/main.pdf
+            Slides/Week_01/lecture1.pdf
+            Slides/Week_02/lecture2.pdf
+          retention-days: 30

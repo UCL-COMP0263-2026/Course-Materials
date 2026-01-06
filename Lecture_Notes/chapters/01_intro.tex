@@ -1,0 +1,515 @@
+\chapter{Introduction to inverse problems}\label{ch:intro}
+
+Solving an inverse problem is the task of computing an unknown physical quantity that is related to given, indirect measurements via a forward model. Inverse problems appear in a vast majority of applications, including imaging (Computed Tomography (CT), Positron Emission Tomography (PET), Magnetic Resonance Imaging (MRI), Electron Tomography (ET), microscopic imaging, geophysical imaging), signal- and image-processing, computer vision, machine learning and (big) data analysis in general, and many more.
+
+Mathematically, an inverse problem can be described as the solution of the operator equation
+\begin{align}
+K u = f \label{eq:invprob}
+\end{align}
+with given measurement data $f$ for the unknown quantity $u$. Here, $K \colon \mathcal{U} \to \mathcal{V}$ denotes an operator mapping from the Banach space $\mathcal{U}$ to the Banach space $\mathcal{V}$. For the better part of this lecture, we are going to restrict ourselves to linear and bounded operators though.
+
+Inverting a forward model however is not straightforward in most relevant applications, for two basic reasons: either a (unique) inverse model simply does not exist, or existing inverse models heavily amplify small measurement errors. 
+The issues of non-existence, non-uniqueness, and instability that we have observed in these examples are central to the study of inverse problems. To classify these issues formally, we rely on the concepts of well- and ill-posedness.
+
+\begin{defi}[Well-posed problem]\label{def:well-posed}\normalfont
+Problem \eqref{eq:invprob}, with $K \colon \mathcal{U} \to \mathcal{V}$, is called \emph{well-posed} if it satisfies the following three conditions:
+\begin{enumerate}
+    \item \textbf{Existence} A solution $u \in \mathcal{U}$ exists for all admissible data $f \in \mathcal{V}$.
+    \item \textbf{Uniqueness} The solution $u$ is unique.
+    \item \textbf{Stability} The solution $u$ depends continuously on the data $f$. That is, small perturbations in the data lead to small changes in the solution.
+\end{enumerate}
+\end{defi}
+
+If any of these conditions are violated, the problem is called \emph{ill-posed}. While the definition, consisting of existence, uniqueness and stable dependence upon the input data, is usually attributed to the work of Hadamard in the context of partial differential equations \cite{hadamard1902problemes,hadamard1923lectures}, the third condition regarding stability was not clearly formulated in his original work. It only later found its true place of importance, for example in the work of John \cite{john1960continuous}. In practice, the lack of stability is the most common and challenging characteristic of inverse problems, as will be demonstrated by the differentiation and deconvolution examples that are to follow in the next section, where arbitrarily small noise in the data could lead to arbitrarily large errors in the solution.
+
+\section{Examples}
+
+In the following we are going to present various examples of inverse problems and highlight the challenges of dealing with them.
+
+\subsection{Matrix inversion}\label{sec:matinv}
+One of the most simple (class of) inverse problems that arises from (numerical) linear algebra is the solution of linear systems. These can be written in the form of \eqref{eq:invprob} with $u \in \mathbb{R}^n$ and $f \in \mathbb{R}^n$ being $n$-dimensional vectors with real entries and $K \in \mathbb{R}^{n \times n}$ being a matrix with real entries. We further assume $K$ to be a symmetric, positive definite matrix. In that case we know from the spectral theory of symmetric matrices that there exist eigenvalues $\lambda_1 \geq \lambda_2 \geq \ldots \geq \lambda_n > 0$ and corresponding eigenvectors $k_j \in \mathbb{R}^n$ for $j \in \{1, \ldots, n\}$ such that $K$ can be written as
+\begin{align}
+K = \sum_{j = 1}^n \lambda_j k_j k_j^\top \, \text{.}\label{eq:eigrep}
+\end{align}
+It is well known from numerical linear algebra that the condition number $\kappa = \lambda_1 / \lambda_n$ is a measure of how stable \eqref{eq:invprob} can be solved which we will illustrate in the following.
+
+We assume that we observe $f^\delta$ instead of $f$, with $\|f - f^\delta\|_2 \leq \delta \|K\| = \delta \lambda_1$, where $\| \cdot \|_2$ denotes the Euclidean norm and $\|K\|$ the operator norm of $K$ (largest singular value of $K$). Then, if we further denote with $u^\delta$ the solution of $Ku^\delta = f^\delta$, the difference between $u^\delta$ and the solution $u$ of \eqref{eq:invprob} reads as
+\begin{align*}
+u - u^\delta = \sum_{j = 1}^n \lambda_j^{-1} k_j k_j^\top \left( f - f^\delta \right) \, \text{.}
+\end{align*}
+Therefore we can estimate
+\begin{align*}
+\| u - u^\delta \|_2^2 = \sum_{j = 1}^n \lambda_j^{-2} \underbrace{\| k_j \|_2^2}_{ = 1} \left| k_j^\top \left( f - f^\delta \right) \right|^2 \leq \lambda_n^{-2} \| f - f^\delta \|_2^2 \, \text{,}
+\end{align*}
+due to $\lambda_n \leq \lambda_j$ for $j \neq 1$ and the orthogonality of the eigenvectors. Thus, taking the square root yields the estimate 
+\begin{align*}
+\left\| u - u^\delta \right\|_2 \leq \lambda_n^{-1} \| f - f^\delta \|_2 \leq \kappa \delta \, \text{.} 
+\end{align*}
+Hence, we observe that in the worst case an error $\delta$ in the data $y$ is amplified by the condition number $\kappa$ of the matrix $K$. A matrix with large $\kappa$ is therefore called \emph{ill-conditioned}. We want to demonstrate the effect of this error amplification with a small example.
+
+\begin{exm}\normalfont
+Let us consider the matrix
+\begin{align*}
+K = \left( \begin{array}{cc}
+1 & 1\\ 1 & \frac{1001}{1000}
+\end{array} \right)
+\end{align*}
+and the vector $f = (1, 1)^\top$. Then the solution of $Ku = f$ is simply given via $u = (1, 0)^\top$. If we, however, consider the perturbed data $f^\delta = (99/100, 101/100)^\top$ instead of $f$, the solution $u^\delta$ of $Ku^\delta = f^\delta$ is (exactly) $u^\delta = (-19.01, 20)^\top$. The eigenvalues in this example are $\lambda_{1/2} = 1 + \frac{1}{2000} \pm \sqrt{1 + \frac{1}{2000^2}}$ which leads to the condition number $\kappa \approx 4002 \gg 1$ and operator norm $\|K\| \approx 2$. The condition number in this example reflects nicely the amplication of the noise: error in data $n = (-0.01,0.01), \delta = \|n\|/\|K\| \approx \sqrt{2}/200$), error in reconstruction $e = (-20.01,20), \|e\| \approx 20 \sqrt{2}$, noise amplification $\|e\|/\delta \approx 4000$.
+\end{exm}
+
+\subsection{Differentiation}\label{subsec:diff}
+Another classic inverse problem is differentiation. Assume we are given a function $f$ with $f(0) = 0$ for which we want to compute $u = f^\prime$. For $f$ smooth enough, these conditions are satisfied if and only if $u$ and $f$ satisfy the operator equation
+\begin{align*}
+f(y) = \int_0^y u(x) \, dx \, \text{,}
+\end{align*}
+which can be written as the operator equation $Ku = f$ with the linear operator $(K \cdot )(y) := \int_0^y \cdot(x) \, dx$. As in the previous section, we assume that instead of $f$ we observe a noisy version $f^\delta$ for which we further assume that the perturbation is additive, i.e. $f^\delta = f + n^\delta$ with $f \in C^1([0, 1])$ and $n^\delta \in L^\infty([0, 1])$. 
+
+It is obvious that the derivative $u$ exists if the noise $n^\delta$ is differentiable. However, even in the (unrealistic) case $n^\delta$ is differentiable the error in the derivative can become arbitrarily large. Consider the sequence of noise functions $n^{\delta} \in C^1([0, 1]) \hookrightarrow L^\infty([0, 1])$ with
+\begin{align}
+n^{\delta}(x) := \delta \sin\left( \frac{k x}{\delta} \right) \, \text{,} \label{EQU:NOISE}
+\end{align}
+for a fixed but arbitrary number $k$. We on the one hand observe $\left\| n^{\delta} \right\|_{L^\infty([0, 1])} = \delta \rightarrow 0$, but on the other hand have
+\begin{align*}
+u^{\delta} (x) = f^\prime(x) + k \cos\left( \frac{k x}{\delta} \right) \, \text{,}
+\end{align*}
+and therefore obtain the estimate
+\begin{align*}
+\left\| u - u^{\delta} \right\|_{L^\infty([0, 1])} = \left\| (n^{\delta})^\prime \right\|_{L^\infty([0, 1])} = k \, \text{.}
+\end{align*}
+Thus, despite the noise in the data becoming arbitrarily small, the error in the derivative can become arbitrarily big (depending on $k$). In any case for $k>0$ we observe that the solution does not depend continuously on the data.
+
+Note that considering a decreasing error in the norm of the Banach space $C^1([0, 1])$ will yield a different result. If we have a sequence of noise functions (other than those defined in equation \eqref{EQU:NOISE}) with $\left\| n^{\delta} \right\|_{C^1([0, 1])} \leq \delta \rightarrow 0$ instead, we can conclude
+\begin{align*}
+\left\| u - u^{\delta} \right\|_{L^\infty([0, 1])} = \left\| (n^\delta)^\prime \right\|_{L^\infty([0, 1])} \leq \left\| n^{\delta} \right\|_{C^1([0, 1])} \rightarrow 0 \, \text{,}
+\end{align*}
+due to $C^1([0, 1])$ being embedded in $L^\infty([0, 1])$. In contrast to the previous example the sequence of functions $n^{\delta}(x) := \delta \sin(k x)$ for instance satisfies
+\begin{align*}
+\left\| n^{\delta} \right\|_{C^1([0, 1])} = \sup_{x \in [0, 1]} \left| n^{\delta}(x) \right| + \sup_{x \in [0, 1]} \left| (n^{\delta})^\prime(x) \right| = (1 + k)\delta \rightarrow 0 \, \text{.}
+\end{align*}
+However, for a fixed $\delta$ the bound on $\left\| u - u^{\delta} \right\|_{L^\infty([0, 1])}$ can obviously still become fairly large compared to $\delta$, depending on how large $k$ is.
+
+\subsection{Deconvolution}
+
+An interesting problem that occurs in many imaging, image- and signal processing applications is the deblurring or \emph{deconvolution} of signals from a known, linear degradation. Deconvolution of a signal can be modelled as solving the inverse problem of the convolution, which reads as
+\begin{align}
+f(y) = (Ku)(y) := \int_{\mathbb{R}^n} u(x)g(y - x) \, dx \, \text{.}\label{eq:conveq}
+\end{align}
+Here $f$ denotes the blurry image, $u$ is the (unknown) true image and $g$ is the function that models the degradation. Due to the Fourier convolution theorem we can rewrite \eqref{eq:conveq} to 
+\begin{align}
+f &= (2\pi)^{\frac{n}{2}} \mathcal{F}^{-1}\left( \mathcal{F}(u)\mathcal{F}(g) \right) \, \text{.}\label{eq:convft}
+\end{align}
+with $\mathcal{F}$ denoting the Fourier transform
+\begin{align}
+\mathcal{F}(u)(\xi) &:= (2\pi)^{-\frac{n}{2}} \int_{\mathbb{R}^n} u(x) \exp(-i x \cdot \xi) \, dx\label{eq:ft} 
+\intertext{and $\mathcal{F}^{-1}$ being the inverse Fourier transform}
+\mathcal{F}^{-1}(f)(x) &:= (2\pi)^{-\frac{n}{2}} \int_{\mathbb{R}^n} f(\xi) \exp(i x \cdot \xi) \, d\xi\label{eq:ift} 
+\end{align}
+It is important to note that the inverse Fourier transform is indeed the unique, inverse operator of the Fourier transform in the Hilbert-space $L^2$ due to the theorem of Plancherel. If we rearrange \eqref{eq:convft} to solve it for $u$ we obtain
+\begin{align}
+u &= (2\pi)^{-\frac{n}{2}} \mathcal{F}^{-1}\left(\frac{\mathcal{F}(f)}{\mathcal{F}(g)}\right) \, \text{,}\label{eq:deconvft}
+\end{align}
+and hence, we allegedly can recover $u$ by simple division in the Fourier domain.  However, we are quickly going to discover that this inverse problem is ill-posed and the division will lead to heavy amplifications of small errors.
+
+Let $u$ denote the image that satisfies \eqref{eq:conveq}. Further we assume that instead of the blurry image $f$ we observe $f^\delta = f + n^\delta$ instead, and that $u^\delta$ is the solution of \eqref{eq:deconvft} with input datum $f^\delta$. Hence, we observe
+\begin{align}
+(2\pi)^{\frac{n}{2}} \left| u - u^\delta\right| = \left| \mathcal{F}^{-1}\left(\frac{\mathcal{F}(f - f^\delta)}{\mathcal{F}(g)}\right) \right| = \left| \mathcal{F}^{-1}\left(\frac{\mathcal{F}(n^\delta)}{\mathcal{F}(g)}\right) \right| \, \text{.}\label{eq:deconverror}
+\end{align}
+As the convolution kernel $g$ usually has compact support, $\mathcal{F}(g)$ will tend to zero for high frequencies. Hence, the denominator of \eqref{eq:deconverror} becomes fairly small, whereas the numerator will be non-zero as the noise is of high frequency. Thus, in the limit the solution will not depend continuously on the data and the convolution problem therefore be ill-posed. 
+
+\subsection{Tomography}
+In almost any tomography application the underlying inverse problem is either the inversion of the Radon transform or of the X-ray transform in dimensions higher than two. For $u \in C^\infty_0(\mathbb{R}^n)$, $s \in \mathbb{R}$ and $\theta \in S^{n - 1}$, the Radon transform\protect\footnotemark 
+\footnotetext{Named after the Austrian mathematician Johann Karl August Radon (16 December 1887 – 25 May 1956)} $R:C^\infty_0(\mathbb{R}^n) \rightarrow C^\infty(S^{n -1} \times \mathbb{R})$ can be defined as the integral operator
+\begin{align}
+f(\theta, s) = (\mathcal{R}u)(\theta, s) &= \int_{x \cdot \theta = s} u(x) \, dx\label{eq:radon}\\
+&= \int_{\theta^\perp} u(s\theta + y) \, dy \, \text{,}\nonumber
+\end{align}
+which for $n = 2$ coincides with the X-ray transform
+\begin{align*}
+f(\theta, s) = (\mathcal{P}u)(\theta, s) = \int_{\mathbb{R}} u(s \theta + t \theta^\perp) \, dt \, \text{,}
+\end{align*} 
+for $\theta \in S^{n - 1}$ and $x \in \theta^\perp$. Hence, the X-ray transform (and therefore also the Radon transform in two dimensions) integrates the function $u$ over lines in $\mathbb{R}^n$.
+
+\begin{exm}
+Let $n = 2$. Then $S^{n -1}$ is simply the unit sphere $S^1 = \{ \theta \in \mathbb{R}^2 \ | \ \|\theta\|_2 = 1 \}$. We can choose for instance $\theta = ( \cos(\varphi), \sin(\varphi) )^\top$, $\varphi \in [0, 2\pi [$, and parametrise the Radon transform in terms of $\varphi$ and $s$, i.e.
+\begin{align}
+f(\varphi, s) = (\mathcal{R}u)(\varphi, s) = \int_\mathbb{R} u(s \cos(\varphi) - t \sin(\varphi), s\sin(\varphi) + t \cos(\varphi) ) \, dt \, \text{.}\label{eq:xray}
+\end{align}
+Note that---with respect to the origin of the reference coordinate system---$\varphi$ determines the angle of the line along one wants to integrate, while $s$ is the offset of that line to the centre of the coordinate system.
+\end{exm}
+
+\begin{figure}[htbp]
+\centering
+\IfFileExists{../Common_Images/fig_radon.pdf}{%
+    \includegraphics[width=0.8\textwidth]{../Common_Images/fig_radon.pdf}%
+}{%
+    \framebox{\parbox{0.8\textwidth}{\centering
+    \vspace{3cm}
+    	extbf{Missing file: fig\_radon.pdf} \\
+    \small\textit{Place fig\_radon.pdf in Common\_Images/.}
+    \vspace{3cm}
+    }}%
+}
+\caption{Visualization\protect\footnotemark~of the Radon transform in 2D (which conincides with the X-ray transform). The function $u$ is integrated over the ray parametrized by $\varphi$ and $s$.}
+\end{figure}
+
+\footnotetext{Figure adapted from wikipedia \url{https://commons.wikimedia.org/w/index.php?curid=3001440}}
+
+\subsubsection{X-ray Computed Tomography (CT)}
+In X-ray computed tomography (CT), the unknown quantity $u$ represents a spatially varying density that is exposed to X-radiation from different angles, and that absorbs the radiation according to its material or biological properties.
+
+The basic modelling assumption for the intensity decay of an X-ray beam is that on a small distance $\Delta t$ it is proportional to the intensity itself, the density and the distance, i.e.
+\begin{align*}
+\frac{I(x + (t + \Delta t) \theta) - I(x + t \theta)}{\Delta t} = -I(x + t \theta)u(x + t \theta ) \, \text{,}
+\end{align*}
+for $x \in \theta^\perp$. By taking the limit $\Delta t \rightarrow 0$ we end up with the ordinary differential equation
+\begin{align}
+\frac{d}{dt} I(x + t \theta) = -I(x + t \theta) u(x + t \theta) \, \text{.}\label{eq:ct1}
+\end{align}
+We now integrate \eqref{eq:ct1} from $t = -\sqrt{R^2 - \| x \|_2^2}$, the position of the emitter, to $t = \sqrt{R^2 - \| x \|_2^2}$, the position of the detector, to obtain
+\begin{align*}
+\int_{-\sqrt{R^2 - \| x \|_2^2}}^{\sqrt{R^2 - \| x \|_2^2}} \frac{\frac{d}{dt} I(x + t \theta)}{I(x + t \theta)} \, dt = - \int_{-\sqrt{R^2 - \| x \|_2^2}}^{\sqrt{R^2 - \| x \|_2^2}} u(x + t \theta) \, dt \, \text{.}
+\end{align*}
+Note that due to $d/dx \log(f(x)) = f^\prime(x)/f(x)$ the left hand side in the above equation simplifies to
+\begin{align*}
+\int_{-\sqrt{R^2 - \| x \|_2^2}}^{\sqrt{R^2 - \| x \|_2^2}} \frac{\frac{d}{dt} I(x + t \theta)}{I(x + t \theta)} \, dt = \log\left(I\left(x + \sqrt{R^2 - \| x \|_2^2} \theta \right)\right) - \log\left(I\left(x- \sqrt{R^2 - \| x \|_2^2} \theta \right)\right) \, \text{.}
+\end{align*}
+As we know the radiation intensity at both the emitter and the detector, we therefore know $f(x, \theta) := \log(I(x - \theta\sqrt{R^2 - \| x \|_2^2})) - \log(I(x + \theta\sqrt{R^2 - \| x \|_2^2})) $ and we can write the estimation of the unknown density $u$ as the inverse problem of the X-ray transform \eqref{eq:xray} (if we further assume that $u$ can be continuously extended to zero outside of the circle of radius $R$). 
+
+\subsubsection{Positron Emission Tomography (PET)}
+In Positron Emission Tomography (PET) a so-called radioactive tracer (a positron emitting radionuclide on a biologically active molecule) is injected into a patient (or subject). The emitted positrons of the tracer will interact with the subjects' electrons after travelling a short distance (usually less than 1mm), causing the annihilation of both the positron and the electron, which results in a pair of gamma rays moving into (approximately) opposite directions. This pair of photons is detected by the scanner detectors, and an intensity $f(\varphi, s)$ can be associated with the number of annihilations detected at the detector pair that forms the line with offset $s$ and angle $\varphi$ (with respect to the reference coordinate system). Thus, we can consider the problem of recovering the unknown tracer density $u$ as a solution of the inverse problem \eqref{eq:radon} again. The line of integration is determined by the position of the detector pairs and the geometry of the scanner. 
+
+\subsection{Magnetic Resonance Imaging (MRI)}
+Magnetic resonance imaging (MRI) is an imaging technique that allows one to visualise the chemical composition of patients or materials. MRI scanners use strong magnetic fields and radio waves to excite subatomic particles (like protons) that subsequently emit radio frequency signals which can be measured by the radio frequency coils. In the following we want to briefly outline the mathematics of the acquisition process. Subsequently we are going to see that finding the unknown spin proton density basically leads to solving the inverse problem of the Fourier transform \eqref{eq:ft}.
+
+\noindent The magnetisation of a so-called spin isochromat can be described by the Bloch equations\protect\footnotemark 
+\footnotetext{Named after the Swiss born American physicist Felix Bloch (23 October 1905 - 10 September 1983)}
+\begin{align}
+\frac{d}{dt}\left( \begin{array}{c} M_x(t)\\ M_y(t)\\ M_z(t)\end{array}\right) = \left( \begin{array}{ccc} -\frac{1}{T_2} & \gamma B_z(t) & -\gamma B_y(t)\\ -\gamma B_z(t) & -\frac{1}{T_2} & \gamma B_x(t)\\ \gamma B_y(t) & -\gamma B_x(t) & -\frac{1}{T_1} \end{array}\right)\left( \begin{array}{c}M_x(t)\\ M_y(t)\\ M_z(t) \end{array}\right) + \left( \begin{array}{c}0\\ 0\\ \frac{M_0}{T_1} \end{array}\right) \, \text{.}\label{eq:bloch1}
+\end{align}
+Here $M(t) = (M_x(t), M_y(t), M_z(t))$ is the nuclear magnetisation (of the spin isochromat), $\gamma$ is the gyromagnetic ratio, $B(t) = (B_x(t), B_y(t), B_z(t))$ denotes the magnetic field experienced by the nuclei, $T_1$ is the longitudinal and $T_2$ the transverse relaxation time and $M_0$ the magnetisation in thermal equilibrium. If we define $M_{xy}(t) = M_x(t) + i M_y(t)$ and $B_{xy}(t) = B_x(t) + i B_y(t)$, we can rewrite \eqref{eq:bloch1} to
+\begin{subequations}
+\begin{align}
+\frac{d}{dt} M_{xy}(t) &= -i \gamma \left( M_{xy}(t) B_z(t) - M_z(t) B_{xy}(t) \right) - \frac{M_{xy}(t)}{T_2}\\
+\frac{d}{dt} M_{z}(t) &= i \frac{\gamma}{2} \left( M_{xy}(t) \overline{B_{xy}}(t) - \overline{M_{xy}}(t) B_{xy}(t) \right) - \frac{M_{z}(t) - M_0}{T_1}
+\end{align}\label{eq:complexbloch1}
+\end{subequations}
+with $\overline{\cdot}$ denoting the complex conjugate of $\cdot$.
+
+If we assume for instance that $B = (0, 0, B_0)$ is just a constant magnetic field in $z$-direction, \eqref{eq:complexbloch1} reduces to the decoupled equations
+\begin{subequations}
+\begin{align}
+\frac{d}{dt} M_{xy}(t) &= -i \gamma B_0 M_{xy}(t) - \frac{M_{xy}(t)}{T_2} \, \text{,}\label{subeq:comlexbloch21}\\
+\frac{d}{dt} M_{z}(t) &= - \frac{M_{z}(t) - M_0}{T_1} \, \text{.}
+\end{align}\label{eq:complexbloch2}
+\end{subequations}
+It is easy to see that this system of equations \eqref{eq:complexbloch2} has the unique solution
+\begin{subequations}
+\begin{align}
+M_{xy}(t) &= e^{-t(i \omega_0 + 1/T_2)}M_{xy}(0)\label{eq:xymaghombckmag}\\
+M_z(t) &= M_z(0) e^{-\frac{t}{T_1}} + M_0\left(1 - e^{-\frac{t}{T_1}}\right)
+\end{align}
+\end{subequations}
+for $\omega_0 := \gamma B_0$ denoting the Larmor frequency, and $M_{xy}(0)$, $M_z(0)$ being the initial magnetisations at time $t = 0$.
+
+\subsubsection{Rotating frame}\label{sec:rotframe}
+
+Thus, for a constant magnetic background field in $z$-direction, $B_0$, $M_{xy}$ basically rotates around the $z$-axis in clockwise direction with frequency $\omega_0$ (if we ignore the $T_2$ decay for a moment). Rotating the $x$- and $y$-coordinate axes with the same frequency yields the representation of the Bloch equations in the so-called rotating frame. If we substitute $M^r_{xy}(t) := e^{i \omega_0 t} M_{xy}(t)$, $B^r_{xy}(t) := B_{xy}(t)e^{i \omega_0 t}$, $M^r_z(t) := M_z(t)$ and $B^r_z(t) := B_z(t)$, we obtain
+\begin{subequations}
+\begin{align}
+\frac{d}{dt} M^r_{xy}(t) &= -i \gamma \left( M^r_{xy}(t) (B^r_z(t) - B_0) - M^r_z(t) B^r_{xy}(t) \right) - \frac{M^r_{xy}(t)}{T_2}\label{subeq:complexblochrotframe1}\\
+\frac{d}{dt} M^r_{z}(t) &= i \frac{\gamma}{2} \left( M^r_{xy}(t) \overline{B^r_{xy}}(t) - \overline{M^r_{xy}}(t) B^r_{xy}(t) \right) - \frac{M^r_{z}(t) - M_0}{T_1}
+\end{align}\label{eq:complexblochrotframe}
+\end{subequations}
+instead of \eqref{eq:complexbloch1}.
+
+Thus, if we assume the magnetic field to be constant with magnitude $B_0$ in $z$-direction within the rotating frame, i.e. $B^r(t) = (B^r_x(t), B^r_y(t), B_0)$, \eqref{subeq:complexblochrotframe1} simplifies to
+\begin{align}
+\frac{d}{dt} M^r_{xy}(t) &= i \gamma M^r_z(t) B^r_{xy}(t) - \frac{M^r_{xy}(t)}{T_2}\, \text{.}\label{eq:complexblochrotframe2} 
+\end{align}
+
+\subsubsection{$90^{\circ}$ pulse}\label{sec:90pulse}
+Now we assume that $B^r_x(t) = c$, $c$ constant, and $B^r_y(t) = 0$ for $t \in [0, \tau]$, and $\tau \ll T_1$ and $\tau \ll T_2$. Then we can basically ignore the effect of $M^r_{xy}(t)/T_2$ and $(M^r_{z}(t) - M_0)/T_1$, and the Bloch equations in the rotating frame simplify to
+\begin{align}
+\frac{d}{dt}\left( \begin{array}{c} M^r_x(t)\\ M^r_y(t)\\ M^r_z(t)\end{array}\right) = \left( \begin{array}{ccc} 0 & 0 & 0\\ 0 & 0 & \omega\\ 0 & -\omega & 0 \end{array}\right)\left( \begin{array}{c}M^r_x(t)\\ M^r_y(t)\\ M^r_z(t) \end{array}\right)\label{eq:blochrotframepulse}
+\end{align}
+with $\omega := \gamma c$, in matrix form with separate components. Assuming the initial magnetisations in the rotating frame to be zero in the $x$-$y$ plane, i.e. $M^r_x(0)$ = 0 and $M^r_y(0) = 0$, and constant in the $z$-plane with value $M^r_z(0)$, the solution of \eqref{eq:blochrotframepulse} can be written as
+\begin{align}
+\left( \begin{array}{c}M^r_x(t)\\ M^r_y(t)\\ M^r_z(t) \end{array}\right) = \left(\begin{array}{ccc} 1 & 0 & 0\\ 0 & \cos(\omega t) & \sin(\omega t)\\ 0 & -\sin(\omega t) & \cos(\omega t) \end{array}\right)\left( \begin{array}{c}0\\ 0\\ M^r_z(0) \end{array}\right)\, \text{.}\label{eq:blochrotframepulsesol}
+\end{align}
+Thus, equation \eqref{eq:blochrotframepulsesol} rotates the initial $z$-magnetisation around the $x$-axis by the angle $\theta := \omega t$. Note that if $c$ and $\tau$ are chosen such that $\theta = \pi/2$, all magnetisation is rotated from the $z$-axis to the $y$-axis, i.e. $M_y^r(\tau) = M_z^r(0)$. In analogy, choosing $B_x(t) = 0$ and $B_y(t) = c$, all magnetisation can be shifted from the $z$- to the $x$-axis.
+
+\subsubsection{Signal acquisition}
+
+If the radio-frequency (RF) pulse is turned off and thus, $B^r_x(t) = 0$ and $B^r_y(t) = 0$ for $t > \tau$, the same coils that have been used to induce the RF pulse can be used to measure the $x$-$y$ magnetisation. Since we measure a volume of the whole $x$-$y$ net-magnetisation, the acquired signal equals
+\begin{align}
+y(t) = \int_{\mathbb{R}^3} M(x, t) \, dx = \int_{\mathbb{R}^3} e^{-i\omega_0(x) t} M^r(x, t) \, dx
+\end{align}
+with $M(x, t)$ denoting $M_{xy}(t)$ for a specific spatial coordinate $x \in \mathbb{R}^3$ ($M^r(x, t)$ respectively).  Using \eqref{eq:xymaghombckmag} and assuming $\tau < t \ll T_2$, this yields 
+\begin{align}
+y(t) = \int_{\mathbb{R}^3} M_\tau(x) e^{-i \omega_0(x) t} \, dx \, \text{,}\label{eq:nmrsigacq}
+\end{align}
+with $M_\tau$ denoting the $x$-$y$-magnetisation at spatial location $x \in \mathbb{R}^3$ and time $t = \tau$. Note that $M_\tau = 0$ without any RF pulse applied in advance. 
+
+\subsubsection{Signal recovery}
+
+The basic clue to allow for spatially resolving nuclear magnetic resonance spectrometry is to add a magnetic field $\hat{B}(t)$ to the constant magnetic field $B_0$ in $z$-direction that varies spatially over time. Then, \eqref{subeq:comlexbloch21} changes to
+\begin{align}
+\frac{d}{dt} M_{xy}(t) &= -i\gamma(B_0 + \hat{B}(t))M_{xy}(t) - \frac{M_{xy}(t)}{T_2} \, \text{,}\nonumber
+\intertext{which, for initial value $M_{xy}(0)$, has the unique solution}
+M_{xy}(t) &= e^{-i \gamma \left(B_0 t + \int_0^t \hat{B}(\tau) \, d\tau\right)} e^{-\frac{t}{T_2}} M_{xy}(0)
+\end{align}
+if we ensure $\hat{B}(0) = 0$. If now $x(t)$ denotes the spatial location of a considered spin isochromat at time $t$, we can write $\hat{B}(t)$ as $\hat{B}(t) = x(t) \cdot G(t)$, with a function $G$ that describes the influence of the magnetic field gradient over time. 
+
+\noindent Based on the considerations that lead to \eqref{eq:nmrsigacq} we therefore measure
+\begin{align}
+y(t) &= \int_{\mathbb{R}^3} M_\tau(x) e^{-i\gamma \left(B_0(x) t + \int_0^t x(\tau) \cdot G(\tau) \, d\tau\right)} \, dx\nonumber
+\intertext{in an NMR experiment. Assuming that $B_0$ is also constant in space, we can consider the equation in the rotating frame (see Section \ref{sec:rotframe}) by eliminating this term and by writing the signal acquisition as}
+e^{i \gamma B_0 t} y(t) &= \int_{\mathbb{R}^3} M_\tau(x) e^{-i\gamma \int_0^t x(\tau) \cdot G(\tau) \, d\tau} \, dx \, \text{.}\label{eq:nmrsig}
+\end{align}
+
+In the following we assume that $x(t)$ can be approximated reasonably well via its zero-order Taylor approximation around $t_0 = 0$, i.e.
+\begin{align}
+\int_0^t x(\tau) \cdot G(\tau) \, d\tau \approx x(0) \cdot \int_0^t G(\tau) \, d\tau \, \text{.}\label{eq:taylapprox}
+\end{align} 
+Note that for static objects, this approximation holds exactly. Hence, if we identify the unknown spin-proton density $M_\tau$ with $u$, the inverse problem of finding $u$ for given measurements $y$ is equivalent to solving the inverse problem of the Fourier transform
+\begin{align}
+f(t) = (K u)(t) = \int_{\mathbb{R}^3} u(x) e^{-i x \cdot \xi(t)} \, dx \, \text{,} 
+\end{align}
+with $f(t) := e^{i \gamma B_0 t} y(t) $ and $\xi(t) := \gamma \int_0^t G(\tau) \, d\tau$.
+
+\section{Generalised inverses}\label{sec:geninv}
+We have established what an inverse problem is, have given examples for inverse problems and shown that inverse problems like matrix inversion are ill-conditioned, and inverse problems like differentiation and deconvolution are ill-posed. For matrix inverse problems, or simply linear systems of equations that want to be solved, it is pretty straight-forward to see when an inverse problem solution exists and when it is unique. Let's consider the problem $K u = f$ for $K \in \mathbb{R}^{m \times n}$, $u \in \mathbb{R}^n$ and $f \in \mathbb{R}^m$. A solution exists if and only if $f$ is in the range of $K$ (i.e., the span of its columns), meaning the operator is surjective onto the data space. The solution is unique if and only if the null space of $K$ is trivial (i.e., contains only the zero vector), meaning the operator is injective. Let's illustrate this with two simple examples.
+
+\begin{exm}[Non-existence]\normalfont
+Consider the linear system $K u = f$ with the non-surjective (rank-deficient) matrix and data vector
+\begin{align*}
+K = \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix}, \quad f = \begin{pmatrix} 3 \\ 5 \end{pmatrix} \, \text{.}
+\end{align*}
+The range of $K$, $\mathcal{R}(K)$, is the span of its column vectors, which are linearly dependent. Specifically, $\mathcal{R}(K) = \text{span} \{ (1, 2)^\top \}$. The data vector $f = (3, 5)^\top$ is not a multiple of $(1, 2)^\top$ and is therefore not in the range of $K$. The system of equations is
+\begin{align*}
+u_1 + 2u_2 &= 3 \, , \\
+2u_1 + 4u_2 &= 5 \, .
+\end{align*}
+Multiplying the first equation by $2$ yields $2u_1 + 4u_2 = 6$, which contradicts the second equation. Thus, no solution $u \in \mathbb{R}^2$ exists for this problem.
+\end{exm}
+
+\begin{exm}[Non-uniqueness]\normalfont
+Now, consider the same non-injective matrix $K$, but with a data vector $f$ that lies within its range:
+\begin{align*}
+K = \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix}, \quad f = \begin{pmatrix} 3 \\ 6 \end{pmatrix} \, \text{.}
+\end{align*}
+Here, $f = 3 \cdot (1, 2)^\top$, so $f \in \mathcal{R}(K)$. The system of equations is now
+\begin{align*}
+u_1 + 2u_2 &= 3 \\
+2u_1 + 4u_2 &= 6
+\end{align*}
+The second equation is redundant as it is simply twice the first. The system reduces to the single equation $u_1 + 2u_2 = 3$, which has infinitely many solutions. For example, one solution vector is $u^{(1)} = (3, 0)^\top$, and another is $u^{(2)} = (1, 1)^\top$. The null space of $K$ is found by solving $K u=0$, which gives $u_1 + 2u_2 = 0$. The null space is $\mathcal{N}(K) = \text{span} \{ (-2, 1)^\top \}$. Any vector of the form $u = (3, 0)^\top + c(-2, 1)^\top$ for any scalar $c \in \mathbb{R}$ is a solution, demonstrating non-uniqueness.
+\end{exm}
+
+These examples illustrate that a ``classical'' inverse fails when a matrix is not bijective, i.e. both injective and surjective. Hence, the inverse problem is ill-posed in the sense that the solution does not exist or is not unique. This aspect of ill-posedness can be rectified by the introduction of a generalised inverse that provides a meaningful and unique ``best-fit'' solution for \emph{any} linear system. This is the purpose of the \textbf{Moore-Penrose inverse} $K^\dagger$.
+
+\noindent The solution $u^\dagger = K^\dagger f$ is unique and is defined by two key properties:
+\begin{enumerate}
+    \item \textbf{Least Squares Solution}: It minimises the error $\|K u - f\|_{\mathcal{V}}$. The set of all least-squares solutions can be found by solving the \textbf{normal equation} $K^* K u = K^* f$.
+    \item \textbf{Minimal Norm Solution}: Among all vectors that solve the normal equation, $u^\dagger$ is the one with the smallest Euclidean norm $\|u\|_{\mathcal{U}}$. This resolves the issue of non-uniqueness.
+\end{enumerate}
+Together, we can write these conditions as
+\begin{align*}
+    K^\dagger f &= \argmin_{u} \left\{ \|u\|_{\mathcal{U}} \left| u \in \argmin_{\tilde{u}} \|K\tilde{u} - f\|_{\mathcal{V}}^2 \right. \right\} \, , \\
+    &= \argmin_{u} \left\{ \|u\|_{\mathcal{U}} \left| K^* K u = K^* f \vphantom{\argmin_{\tilde{u}}} \right. \right\} \, .
+\end{align*}
+You will verify in your first coursework that the normal equation is indeed equivalent to the minimisation of the (squared) quadratic error between model output and data. Let us revisit our previous examples to verify that the Moore-Penrose inverse does exist and is unique in these cases.
+
+\subsubsection*{Solution for the Non-Existence Example}
+
+Recall the problem
+$$ K = \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix}, \quad f = \begin{pmatrix} 3 \\ 5 \end{pmatrix} \, . $$
+First, we construct the normal equation. For a real matrix, the adjoint $K^*$ is simply the transpose $K^\top$.
+\begin{align*}
+    K^* K &= \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix} \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix} = \begin{pmatrix} 5 & 10 \\ 10 & 20 \end{pmatrix} , \\
+    K^* f &= \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix} \begin{pmatrix} 3 \\ 5 \end{pmatrix} = \begin{pmatrix} 13 \\ 26 \end{pmatrix} .
+\end{align*}
+The normal equation $K^* K u = K^* f$ is then
+$$ \begin{pmatrix} 5 & 10 \\ 10 & 20 \end{pmatrix} \begin{pmatrix} u_1 \\ u_2 \end{pmatrix} = \begin{pmatrix} 13 \\ 26 \end{pmatrix} . $$
+This system reduces to the single equation $5u_1 + 10u_2 = 13$, or $u_1 + 2u_2 = 13/5$, which defines the set of all least-squares solutions. To find the unique minimal norm solution, we select the solution vector $u$ that lies in the range of $K^*$, which is spanned by $(1, 2)^\top$. So, our solution must have the form $u = c(1, 2)^\top$. Substituting this in $u_1 + 2u_2 = 13/5$ yields
+\begin{align*}
+    c + 2(2c) = 13/5 \implies 5c = 13/5 \implies c = 13/25 .
+\end{align*}
+Hence, the unique minimal-norm least-squares solution is therefore
+\begin{align*}
+    u^\dagger = K^\dagger f = \frac{1}{25} \begin{pmatrix} 13 \\ 26 \end{pmatrix} \, \text{.}
+\end{align*}
+
+\subsubsection*{Solution for the Non-Uniqueness Example}
+
+Recall the problem
+$$ K = \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix}, \quad f = \begin{pmatrix} 3 \\ 6 \end{pmatrix} . $$
+The matrix $K^* K$ is the same as before. We compute $K^* f$ and obtain
+\begin{align*}
+    K^* f &= \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix} \begin{pmatrix} 3 \\ 6 \end{pmatrix} = \begin{pmatrix} 15 \\ 30 \end{pmatrix} .
+\end{align*}
+The corresponding normal equation is
+$$ \begin{pmatrix} 5 & 10 \\ 10 & 20 \end{pmatrix} \begin{pmatrix} u_1 \\ u_2 \end{pmatrix} = \begin{pmatrix} 15 \\ 30 \end{pmatrix} . $$
+This system reduces to $5u_1 + 10u_2 = 15$, or $u_1 + 2u_2 = 3$. From this infinite set of solutions, we again select the unique minimal norm solution of the form $u = c(1, 2)^\top$, i.e.
+\begin{align*}
+    c + 2(2c) = 3 \implies 5c = 3 \implies c = 3/5 .
+\end{align*}
+Hence, the unique minimal norm solution is
+\begin{align*}
+    u^\dagger = K^\dagger f = \frac{1}{5} \begin{pmatrix} 3 \\ 6 \end{pmatrix} \, \text{.}
+\end{align*}
+Thus, by using the normal equation to find the least-squares fit and then selecting for the minimal norm, the Moore-Penrose inverse provides a consistent and unique solution. In fact, we can prove these properties for the Moore-Penrose inverse, which the interested reader can study in Appendix (Reference to be inserted later).
+
+So, at least for matrix-based inverse problems, and in fact linear inverse problems in general, we can guarantee existence and uniqueness of its Moore-Penrose inverse.
+
+\section{Singular value decomposition (SVD)}\label{sec:svd}
+
+Before we address the question of whether the inverse problem is also stable, we first want to introduce the concept of the singular value decomposition. The singular value decomposition (SVD) is a powerful tool for analysing linear operators, understanding the structure of the range and null spaces, and characterising the stability of the inversion process. We begin with the definition for matrices, following the conventions typically used in linear algebra, and then generalise it to compact operators in Hilbert spaces, adopting the conventions common in functional analysis.
+
+\subsection{SVD for matrices}
+The \href{https://en.wikipedia.org/wiki/Singular_value_decomposition}{\emph{Singular value decomposition (SVD)}} generalises the concept of eigendecompositions of square matrices to arbitrary matrices. It states that every real matrix $K \in \mathbb{R}^{m \times n}$ can be factorised into three matrices $V \in \mathbb{R}^{m \times m}$, $\Sigma \in \mathbb{R}^{m \times n}$ and $U \in \mathbb{R}^{n \times n}$ via
+\begin{align}
+K = V\Sigma U^\top \, .\label{eq:svd}
+\end{align}
+
+\begin{rem}[Notation convention]\normalfont
+The standard convention in many linear algebra textbooks denotes the SVD as $K = U\Sigma V^\top$, where $U$ corresponds to the output space (left-singular vectors) and $V$ to the input space (right-singular vectors). However, in the context of inverse problems, where we typically solve $K u = f$ for the unknown $u$, it is more intuitive to align the notation such that $U$ represents the matrix of singular vectors in the input space (the domain of $K$) and $V$ represents the matrix of singular vectors in the output space (the codomain of $K$). We adopt this convention ($K = V\Sigma U^\top$) here to maintain consistency with the subsequent definition for compact operators.
+\end{rem}
+
+Here both $U$ and $V$ are orthogonal matrices, i.e., $U^\top U = I_{n \times n}$, $U U^\top = I_{n \times n}$, $V^\top V = I_{m \times m}$ and $V V^\top = I_{m \times m}$. The columns of $U$, denoted by $u_j$, are called the \emph{right-singular vectors} of $K$ (corresponding to the input space), and the columns of $V$, denoted by $v_j$, are called the \emph{left-singular vectors} of $K$ (corresponding to the output space). The matrix $\Sigma$ is a rectangular diagonal matrix of the form
+\begin{align*}
+\Sigma = \left( \begin{matrix} \sigma_1 & 0 & \ldots & 0 \\ 0 & \sigma_2 & \ldots & 0 \\ \vdots & \vdots & \ddots & \vdots \\ 0 & 0 & \ldots & \sigma_{n} \\ 0 & 0 & \ldots & 0 \\ \vdots & \vdots & \ddots & \vdots \\ 0 & 0 & \ldots & 0\end{matrix}\right) \quad \text{or} \quad \Sigma = \left( \begin{matrix} \sigma_1 & 0 & \ldots & 0 & 0 & \ldots & 0\\ 0 & \sigma_2 & \ldots & 0 & 0 & \ldots & 0\\ \vdots & \vdots & \ddots & \vdots & \vdots & \ddots & \vdots \\ 0 & 0 & \ldots & \sigma_{m} & 0 & \ldots & 0\end{matrix}\right)\, ,
+\end{align*}
+depending on whether $m > n$ (first case) or $n > m$ (second case). If $n = m$, the matrix $\Sigma$ is the square diagonal matrix $\Sigma = \text{diag}(\sigma_1, \ldots, \sigma_n)$.
+
+The entries $\{ \sigma_j \}_{j = 1}^{\min(m, n)}$ are called the \emph{singular values} of $K$. They are non-negative, $\sigma_j \geq 0$, and by convention, ordered descendingly, $\sigma_1 \geq \sigma_2 \geq \ldots \geq \sigma_r > 0$, where $r = \text{rank}(K) \leq \min(m, n)$. The singular values $\sigma_{r+1}$ through $\sigma_{\min(m,n)}$ are zero.
+
+The SVD provides a decomposition of the matrix action. We can write $K$ as a sum of rank-one matrices
+\begin{align*}
+    K = \sum_{j=1}^r \sigma_j v_j u_j^\top \, .
+\end{align*}
+This representation highlights how the operator maps the input space to the output space. Specifically, $K u_j = \sigma_j v_j$ and $K^* v_j = \sigma_j u_j$.
+
+\subsubsection{Low-rank approximation}
+The SVD is extremely useful in data analysis and dimensionality reduction, often formulated as finding a low-rank approximation to a data matrix. Suppose we have a data matrix $K$ and we believe the true underlying structure has a rank $k$ much lower than $r$. We can construct the best rank-$k$-approximation of $K$ using the SVD.
+
+We define the truncated SVD approximation $K_k$ by keeping only the $k$ largest singular values and setting the rest to zero. Let $\Sigma_k$ be the matrix derived from $\Sigma$ by replacing $\sigma_j$ with $0$ for $j > k$. Then
+\begin{align*}
+    K_k := V \Sigma_k U^\top = \sum_{j=1}^k \sigma_j v_j u_j^\top \, .
+\end{align*}
+This approximation is optimal in the sense of the Frobenius norm, $\| K \|_{\text{Fro}}^2 = \sum_{i,j} |a_{ij}|^2$, which is also equal to the sum of the squared singular values, $\| K \|_{\text{Fro}}^2 = \sum_{j=1}^{r} \sigma_j^2$.
+
+\begin{thm}[Eckart–Young–Mirsky theorem]
+For any matrix $K \in \mathbb{R}^{m \times n}$ and any matrix $\hat K \in \mathbb{R}^{m \times n}$ with $\text{rank}(\hat K) \leq k$, we have
+\begin{align*}
+\| K - K_k \|_{\text{Fro}}^2 \leq \| K - \hat K \|_{\text{Fro}}^2 \, .
+\end{align*}
+The minimal error is given by the sum of the discarded squared singular values
+\begin{align*}
+    \| K - K_k \|_{\text{Fro}}^2 = \sum_{j = k + 1}^{r} \sigma_j^2 \, .
+\end{align*}
+\begin{proof}
+For a sketch of a proof you can for example follow the explanations \href{https://en.wikipedia.org/wiki/Low-rank_approximation#Proof_of_Eckart–Young–Mirsky_theorem_(for_Frobenius_norm)}{at this link here}, or look at this original publication by \href{https://convexoptimization.com/TOOLS/eckart%26young.1936.pdf}{Eckart and Young}.
+\end{proof}
+\end{thm}
+\subsection{SVD for compact operators}
+The concept of the SVD can be extended from matrices to compact linear operators between Hilbert spaces. This generalisation is crucial for infinite-dimensional inverse problems, such as the differentiation example discussed earlier.
+
+Let $\mathcal{U}$ and $\mathcal{V}$ be Hilbert spaces and let $K \in \mathcal{K}(\mathcal{U}, \mathcal{V})$ be a compact linear operator. We adopt a notation consistent with $K u = f$, where $u \in \mathcal{U}$ and $f \in \mathcal{V}$. We will now denote the right-singular vectors (in the input space $\mathcal{U}$) by $u_j$ and the left-singular vectors (in the output space $\mathcal{V}$) by $v_j$.
+
+\begin{defi}[Singular System]\label{def:svd_compact}\normalfont
+A \emph{singular system} $\{ (\sigma_j, u_j, v_j) \}_{j \in \mathbb{N}}$ for a compact operator $K \in \mathcal{K}(\mathcal{U}, \mathcal{V})$ consists of
+\begin{enumerate}
+    \item A sequence of positive singular values $\sigma_1 \geq \sigma_2 \geq \ldots > 0$ such that $\sigma_j \to 0$ as $j \to \infty$ (unless the rank of $K$ is finite).
+    \item An orthonormal system $\{ u_j \}_{j \in \mathbb{N}}$ in $\mathcal{U}$ (right-singular functions/vectors).
+    \item An orthonormal system $\{ v_j \}_{j \in \mathbb{N}}$ in $\mathcal{V}$ (left-singular functions/vectors).
+\end{enumerate}
+such that the following relations hold
+\begin{align*}
+    K u_j = \sigma_j v_j \qquad \text{and} \qquad K^* v_j = \sigma_j u_j \, .
+\end{align*}
+\end{defi}
+
+\noindent The operator $K$ can be represented by its singular value expansion
+\begin{align}
+    K u = \sum_{j=1}^\infty \sigma_j \langle u, u_j \rangle_{\mathcal{U}} v_j \, , \label{eq:svd_compact}
+\end{align}
+for all $u \in \mathcal{U}$. The systems $\{ u_j \}$ and $\{ v_j \}$ form orthonormal bases for $\mathcal{N}(K)^\perp$ and $\overline{\mathcal{R}(K)}$, respectively.
+
+The decay rate of the singular values $\sigma_j \to 0$ is the defining characteristic of ill-posed problems involving compact operators. If $\sigma_j$ decays quickly, the problem is severely ill-posed, meaning the inversion is highly unstable.
+
+\begin{exm}[SVD of the integration operator]\label{exm:svd_integration}\normalfont
+Let us revisit the differentiation problem, where the forward operator is the integration operator $K \colon L^2([0,1]) \to L^2([0,1])$ defined by
+\begin{align*}
+    (K u)(y) = \int_0^y u(x) dx \, .
+\end{align*}
+This is a compact operator. To find its SVD, we need to find the eigenvalues and eigenfunctions of $K^* K$. The adjoint operator $K^*$ is given by $(K^* v)(x) = \int_x^1 v(y) dy$. The composition $K^* K$ is
+\begin{align*}
+    (K^* K u)(x) = \int_x^1 \left( \int_0^y u(z) dz \right) dy \, .
+\end{align*}
+We seek solutions to the eigenvalue problem $K^* K u = \lambda u$. Differentiating this integral equation twice leads to the ordinary differential equation $\lambda u''(x) + u(x) = 0$, with boundary conditions $u'(0)=0$ (derived from the first derivative of the integral equation at $x=0$) and $u(1)=0$ (derived from the integral equation at $x=1$).
+
+Solving this boundary value problem yields the singular values $\sigma_j = \sqrt{\lambda_j}$ and the right-singular functions $u_j$. The singular values are
+\begin{align*}
+    \sigma_j = \frac{1}{(j - 1/2)\pi} = \frac{2}{(2j-1)\pi} \, , \quad j \in \mathbb{N} \, .
+\end{align*}
+The corresponding normalised eigenfunctions (right-singular functions) are
+\begin{align*}
+    u_j(x) = \sqrt{2} \cos\left((j-1/2)\pi x\right) \, .
+\end{align*}
+The left-singular functions $v_j$ are obtained via $v_j = \frac{1}{\sigma_j} K u_j$, which yields
+\begin{align*}
+    v_j(y) = \sqrt{2} \sin\left((j-1/2)\pi y\right) \, .
+\end{align*}
+Hence, the entire singular value decomposition of $K$ for this example reads
+\begin{align*} (Kw)(x) = \sum_{j=1}^{\infty} & \frac{2}{(2j-1)\pi} \left( \int_0^1 w(s) \sqrt{2}\cos\left(\left(j-\frac{1}{2}\right)\pi s\right) ds \right) \sqrt{2}\sin\left(\left(j-\frac{1}{2}\right)\pi x\right) \\
+      = \sum_{j=1}^{\infty} & \frac{4}{(2j-1)\pi} \left( \int_0^1 w(s) \cos\left(\left(j-\frac{1}{2}\right)\pi s\right) ds \right) \sin\left(\left(j-\frac{1}{2}\right)\pi x\right) \, . \end{align*}
+Note that the singular values decay to zero at a rate of $O(1/j)$.
+\end{exm}
+
+\subsection{The Moore-Penrose inverse and instability}
+We can now define the Moore-Penrose inverse $K^\dagger$ explicitly using the SVD. For a compact operator $K$ with singular system $\{ (\sigma_j, u_j, v_j) \}$, the Moore-Penrose inverse $K^\dagger \colon \mathcal{D}(K^\dagger) \to \mathcal{U}$ is given by
+\begin{align}
+    K^\dagger f = \sum_{j=1}^\infty \frac{1}{\sigma_j} \langle f, v_j \rangle_{\mathcal{V}} u_j \, . \label{eq:moore_penrose_svd}
+\end{align}
+The domain $\mathcal{D}(K^\dagger) = \mathcal{R}(K) \oplus \mathcal{R}(K)^\perp$ consists of all $f \in \mathcal{V}$ for which the series in \eqref{eq:moore_penrose_svd} converges. This is equivalent to the Picard criterion
+\begin{align*}
+    \| K^\dagger f \|^2 = \sum_{j=1}^\infty \frac{|\langle f, v_j \rangle_{\mathcal{V}}|^2}{\sigma_j^2} < \infty \, .
+\end{align*}
+If the range of $K$ is infinite-dimensional, then $\sigma_j \to 0$, and the operator $K^\dagger$ is unbounded (discontinuous). This is the mathematical manifestation of instability.
+
+Let us examine how noise propagates through the Moore-Penrose inverse. Suppose we observe noisy data $f^\delta = f + \eta$, where $f = K u^\dagger$ is the exact data corresponding to the true solution $u^\dagger$, and $\eta$ is the noise. The reconstructed solution using the Moore-Penrose inverse is
+\begin{align*}
+    u^\delta = K^\dagger f^\delta = K^\dagger f + K^\dagger \eta = u^\dagger + \sum_{j=1}^\infty \frac{1}{\sigma_j} \langle \eta, v_j \rangle_{\mathcal{V}} u_j \, .
+\end{align*}
+The reconstruction error is
+\begin{align*}
+    \| u^\delta - u^\dagger \|_{\mathcal{U}}^2 = \| K^\dagger \eta \|_{\mathcal{U}}^2 = \sum_{j=1}^\infty \frac{|\langle \eta, v_j \rangle_{\mathcal{V}}|^2}{\sigma_j^2} \, .
+\end{align*}
+
+\subsubsection{Instability in the matrix case}
+For matrices, the sum is finite (up to the rank $r$). If the matrix $K$ is ill-conditioned, it means the condition number $\kappa(K) = \sigma_1 / \sigma_r$ is large. The norm of the Moore-Penrose inverse is $\| K^\dagger \| = 1/\sigma_r$. The error bound is
+\begin{align*}
+    \| u^\delta - u^\dagger \| \leq \frac{1}{\sigma_r} \| \eta \| \, .
+\end{align*}
+If $\sigma_r$ is very small, a small noise $\eta$ can lead to a large error in the solution.
+
+\begin{exm}[Instability of matrix inversion]\normalfont
+Similar to Section \ref{sec:matinv}, consider the matrix $K = \begin{pmatrix} 1 & 1 \\ 1 & 1+c^2 \end{pmatrix}$ for a small $c>0$. The exact data is $f = (1, 1)^\top$, and the true solution is $u^\dagger = (1, 0)^\top$. The inverse is $K^\dagger = K^{-1} = \frac{1}{c^2} \begin{pmatrix} 1+c^2 & -1 \\ -1 & 1 \end{pmatrix}$.
+Suppose we observe noisy data $f^\delta = (1, 1+c\epsilon)^\top$. The noise is $\eta = (0, c\epsilon)^\top$. The reconstructed solution is
+\begin{align*}
+    u^\delta = K^{-1} f^\delta = \frac{1}{c^2} \begin{pmatrix} 1+c^2 - (1+c\epsilon) \\ -1 + (1+c\epsilon) \end{pmatrix} = \begin{pmatrix} 1 - \epsilon/c \\ \epsilon/c \end{pmatrix} \, .
+\end{align*}
+The error is $\| u^\delta - u^\dagger \| = \sqrt{2}|\epsilon/c|$. If $c$ is much smaller than $\epsilon$ (e.g., $c=10^{-6}, \epsilon=10^{-3}$), the error is very large ($\approx 1414$), even though the noise norm $\| \eta \| = |c\epsilon|$ is tiny ($10^{-9}$). This demonstrates the severe amplification of noise due to ill-conditioning.
+\end{exm}
+
+\subsubsection{Instability in the differentiation case}
+For the integration operator (Example \ref{exm:svd_integration}), the singular values are $\sigma_j \approx 2/(2j\pi)$. The decay $\sigma_j \to 0$ for $j \to \infty$ means the inversion (differentiation) is ill-posed.
+
+Consider a high-frequency noise component $\eta_k(y) = \delta v_k(y) = \delta \sqrt{2} \sin((k-1/2)\pi y)$ for some large $k$, where $\| \eta_k \|_{\mathcal{V}} = \delta$. The contribution of this noise component to the reconstruction error is
+\begin{align*}
+    \| K^\dagger \eta_k \|_{\mathcal{U}}^2 = \frac{|\langle \eta_k, v_k \rangle_{\mathcal{V}}|^2}{\sigma_k^2} = \frac{\delta^2}{\sigma_k^2} = \delta^2 (k-1/2)^2 \pi^2 \, .
+\end{align*}
+The error grows linearly with the frequency index $k$. Since $k$ can be arbitrarily large, the error can be arbitrarily large even if the noise amplitude $\delta$ is small. This further supports the observation made in the introduction that differentiation is unstable with respect to high-frequency perturbations.
+
+The analysis using the SVD reveals that the instability of the Moore-Penrose inverse arises from the decay of the singular values to zero (for compact operators) or the presence of very small singular values (for ill-conditioned matrices). Therefore, while the Moore-Penrose inverse guarantees existence and uniqueness of a (minimal norm least-squares) solution, it does not guarantee stability. This necessitates the use of regularisation techniques to obtain stable and meaningful solutions to inverse problems.
