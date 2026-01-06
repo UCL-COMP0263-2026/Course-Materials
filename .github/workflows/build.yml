@@ -1,6 +1,7 @@
 name: Build LaTeX Documents
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
