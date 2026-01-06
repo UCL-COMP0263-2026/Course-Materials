@@ -26,20 +26,14 @@ jobs:
       - name: Compile Lecture Notes
         uses: xu-cheng/latex-action@v3
         with:
-          root_file: Lecture_Notes/main.tex
+          root_file: main.tex
           working_directory: Lecture_Notes
 
-      - name: Compile Slides (Week 01)
-        uses: xu-cheng/latex-action@v3
-        with:
-          root_file: lecture1.tex
-          working_directory: Slides/Week_01
-
-      - name: Compile Slides (Week 02)
-        uses: xu-cheng/latex-action@v3
-        with:
-          root_file: lecture2.tex
-          working_directory: Slides/Week_02
+    #   - name: Compile Slides (Week 01)
+    #     uses: xu-cheng/latex-action@v3
+    #     with:
+    #       root_file: lecture1.tex
+    #       working_directory: Slides/Week_01
 
       - name: Upload Artifacts
         if: always()
