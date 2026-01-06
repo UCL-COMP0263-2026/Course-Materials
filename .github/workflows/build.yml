@@ -49,13 +49,13 @@ jobs:
 
       - name: Rename PDF
         if: success()
-        run: cp Lecture_Notes/main.pdf "COMP0263 Lecture Notes 2026.pdf"
+        run: cp Lecture_Notes/main.pdf "COMP0263_Lecture_Notes_2026_$(date +%Y-%m-%d_%H-%M-%S).pdf"
 
       - name: Upload to Release
         if: success()
         uses: softprops/action-gh-release@v1
         with:
-          files: "COMP0263 Lecture Notes 2026.pdf"
+          files: COMP0263_Lecture_Notes_2026_*.pdf
           tag_name: latest
           generate_release_notes: false
           prerelease: false
