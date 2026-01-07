@@ -5,20 +5,42 @@ on:
   push:
     branches:
       - main
-    paths:
-      - '**.tex'
-      - '**.sty'
-      - 'Common_Images/**'
   pull_request:
     branches:
       - main
-    paths:
-      - '**.tex'
-      - '**.sty'
-      - 'Common_Images/**'
 
 jobs:
-  build:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      lecture-notes-changed: ${{ steps.check.outputs.lecture-notes }}
+      slides-changed: ${{ steps.check.outputs.slides }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check what changed
+        id: check
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -qE '(Lecture_Notes/|Common_Images/)'; then
+            echo "lecture-notes=true" >> $GITHUB_OUTPUT
+          else
+            echo "lecture-notes=false" >> $GITHUB_OUTPUT
+          fi
+          if git diff --name-only HEAD~1 HEAD | grep -qE '(Slides/|Common_Images/)'; then
+            echo "slides=true" >> $GITHUB_OUTPUT
+          else
+            echo "slides=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+  build-lecture-notes:
+    needs: check-changes
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
+      needs.check-changes.outputs.lecture-notes-changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,28 +53,14 @@ jobs:
           root_file: main.tex
           working_directory: Lecture_Notes
 
-    #   - name: Compile Slides (Week 01)
-    #     uses: xu-cheng/latex-action@v3
-    #     with:
-    #       root_file: lecture1.tex
-    #       working_directory: Slides/Week_01
-
-      - name: Upload Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: compiled-pdfs
-          path: |
-            Lecture_Notes/main.pdf
-            Slides/Week_01/lecture1.pdf
-          retention-days: 30
-
-      - name: Rename PDF
+      - name: Rename and upload Lecture Notes PDF
         if: success()
-        run: cp Lecture_Notes/main.pdf "COMP0263_Lecture_Notes_$(date +%Y-%m-%d_%H-%M-%S).pdf"
+        run: |
+          TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+          cp Lecture_Notes/main.pdf "COMP0263_Lecture_Notes_${TIMESTAMP}.pdf"
 
-      - name: Upload to Release
-        if: success()
+      - name: Upload Lecture Notes to Release
+        if: success() && github.event_name == 'push'
         uses: softprops/action-gh-release@v1
         with:
           files: COMP0263_Lecture_Notes_*.pdf
@@ -61,3 +69,57 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-pdfs-lecture-notes
+          path: Lecture_Notes/main.pdf
+          retention-days: 30
+
+  build-slides:
+    needs: check-changes
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
+      needs.check-changes.outputs.slides-changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        week: ['01']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile Slides (Week ${{ matrix.week }})
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: lecture1.tex
+          working_directory: Slides/Week_${{ matrix.week }}
+
+      - name: Rename and upload Slides PDF
+        if: success()
+        run: |
+          TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+          cp Slides/Week_${{ matrix.week }}/lecture1.pdf "COMP0263_Slides_Week_${{ matrix.week }}_${TIMESTAMP}.pdf"
+
+      - name: Upload Slides to Release
+        if: success() && github.event_name == 'push'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: COMP0263_Slides_Week_*.pdf
+          tag_name: latest
+          generate_release_notes: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-pdfs-slides-week-${{ matrix.week }}
+          path: Slides/Week_${{ matrix.week }}/lecture1.pdf
+          retention-days: 30

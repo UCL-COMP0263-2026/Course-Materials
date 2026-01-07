@@ -1,70 +1,301 @@
-% ============================================================================
-% Week 01 Lecture 1 - Beamer Presentation
-% ============================================================================
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
 
-\documentclass[11pt]{beamer}
-
-% ============================================================================
-% Packages
-% ============================================================================
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath}
-\usepackage{amssymb}
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
 \usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
 
-% ============================================================================
-% Beamer Theme
-% ============================================================================
-\usetheme{Madrid}
-\usecolortheme{default}
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
 
-% ============================================================================
-% Graphics Path
-% ============================================================================
-% Allows images to be loaded from Common_Images directory
-\graphicspath{{../../Common_Images/}{./images/}}
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
 
-% ============================================================================
-% Metadata
-% ============================================================================
-\title{Week 01: Lecture 1}
-\subtitle{Course Title}
-\author{}
-\date{\today}
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows} 
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
 
-% ============================================================================
-% Document
-% ============================================================================
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+
+\setbeamercovered{transparent}
+
+% Configure listings for Python and C
+\lstset{
+  basicstyle=\ttfamily\scriptsize, % Smaller font for code to fit
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray!80!black},
+  stringstyle=\color{darkgreen},
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{stone},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  escapeinside={(*@}{@*)},
+  tabsize=4
+}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+\title{Introduction to COMP0263}
+\subtitle{What to expect from this module}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 13 January 2026}
+\institute[]{University College London}
+
 \begin{document}
 
-\frame{\titlepage}
-
+% --- Title Frame ---
 \begin{frame}
-\frametitle{Outline}
+  \titlepage
+\end{frame}
+
+% --- Overview ---
+\begin{frame}
+\frametitle{Lecture Overview}
+\begin{block}{Objectives}
+    \begin{itemize}
+        \item Understand the logistics: Moodle, GitHub, and Scheduling.
+        \item Define the scope of COMP0263 vs. COMP0114.
+        \item Outline the assessment structure (Formative assessment, Courseworks).
+        \item Introduce the \textit{data-driven} philosophy.
+    \end{itemize}
+\end{block}
 \tableofcontents
 \end{frame}
 
-\section{Introduction}
+\section{Logistics and Communication}
+
+% \begin{frame}
+\begin{frame}[fragile]
+\frametitle{Communication Hubs}
+\begin{itemize}
+    \item \textbf{Moodle}: The primary point of contact.
+    \item \textbf{GitHub}: The technical hub for content.
+    \begin{itemize}
+        \item \textbf{Lecture Notes}: An evolving, book-style document.
+        \item \textbf{Slides}: Released weekly via GitHub Releases.
+        \item \textbf{Discussions}: Use the Q\&A feature to upvote/downvote questions.
+        \item \textbf{Pull Requests}: Found a typo? Fork the repo, fix it, and submit a PR.
+    \end{itemize}
+\end{itemize}
+
+\begin{block}{Getting the Materials}
+\begin{lstlisting}[language=bash]
+# Clone the repository
+git clone https://github.com/UCL-COMP0263-2026/Course-Materials.git
+# Check Releases for pre-compiled PDFs!
+\end{lstlisting}
+\end{block}
+\end{frame}
 
 \begin{frame}
-\frametitle{Welcome}
+\frametitle{Weekly Schedule}
+Each week consists of two lecture blocks and one tutorial block.
+
+\begin{table}[]
+\centering
+\begin{tabular}{l l l l}
+\toprule
+\textbf{Day} & \textbf{Time} & \textbf{Activity} & \textbf{Location} \\ 
+\midrule
+\textbf{Tuesday} & 09:00 - 11:00 & Lecture Block 1 & IOE - Bedford Way (20) W3.04 \\
+\textbf{Thursday} & 13:00 - 15:00 & Lecture Block 2 & Gower Street (66-72) G01 \\
+\textbf{Friday} & 14:00 - 16:00 & Computer Practical & Birkbeck Malet St 422/423 \\ 
+\bottomrule
+\end{tabular}
+\end{table}
+
 \begin{itemize}
-  \item This is the first lecture
-  \item Replace this slide content with your material
-  \item Use standard Beamer commands to create your slides
+    \item \textbf{Lectures}: Split into $4 \times 50$ minute slots total.
+    \item \textbf{Structure}: First 3 slots for slides/theory. Final slot is \textbf{Flipped Classroom} (Q\&A, Deep Dives).
+    \item \textbf{Practicals}: TA-led. Focus on Coursework support and coding.
 \end{itemize}
 \end{frame}
 
-\section{Main Content}
+\section{Module Content}
 
 \begin{frame}
-\frametitle{Key Points}
+\frametitle{What is this module?}
+
+\textbf{COMP0263} bridges the gap between mathematical inverse problem theory and modern deep learning.
+
+\begin{alertblock}{The "Guinea Pig" Disclaimer}
+This module is in its first year. You are the pioneer cohort.
 \begin{itemize}
-  \item Point 1
-  \item Point 2
-  \item Point 3
+    \item There may be teething issues.
+    \item Feedback is vital—tell us what works and what doesn't.
+    \item We (Instructors \& TAs) will exercise leniency where necessary.
 \end{itemize}
+\end{alertblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Relationship to COMP0114}
+\small
+\textbf{COMP0114 (Inverse Problems in Imaging)} focuses on "hand-crafted" model-based methods.
+\begin{itemize}
+    \item \textbf{Analytic Solutions}: Moore-Penrose pseudo-inverse and SVD analysis.
+    \item \textbf{Variational Regularisation}: Explicit functionals like Tikhonov ($\Psi(f) = ||f||^2$) or Total Variation ($\Psi(f) = \int |\nabla f|$).
+    \item \textbf{Iterative Solvers}: Gradient Descent, Landweber, and Conjugate Gradients.
+    \item \textbf{Bayesian approach}: MAP estimates with fixed priors.
+\end{itemize}
+\vspace{1em}
+\textbf{COMP0263} asks: \textit{What if we learn the regulariser, the parameters, or the entire solver from data?}
+\end{frame}
+
+\begin{frame}
+\frametitle{Weekly Syllabus: Weeks 1-4}
+\begin{itemize}
+    \item \textbf{Week 1: Introduction} \\
+    Defining ill-posedness, stability, and why standard inversions fail on real data.
+    
+    \item \textbf{Week 2: Model-based Regularisation} \\
+    Recap of classical "hand-crafted" techniques (Spectral filtering, Variational optimisation) as a baseline.
+    
+    \item \textbf{Week 3: Data-driven Basics} \\
+    Learning parameters from data. Bilevel optimisation and optimal filter derivation.
+    
+    \item \textbf{Week 4: Neural Regularisers} \\
+    Replacing hand-crafted penalties with Deep Neural Networks (e.g., NETT framework).
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Weekly Syllabus: Weeks 5-10}
+\begin{itemize}
+    \item \textbf{Week 5: Unrolling Algorithms} \\
+    Interpreting iterative algorithms as neural networks. Sparse recovery and denoising.
+    \item \textbf{Week 6: Variational Networks \& Implicit Layers} \\
+    Deep Equilibrium Models (DEQs) and infinite depth networks.
+    \item \textbf{Week 7}: Deep Learning as Optimal Control.
+    \item \textbf{Week 8}: Lifted frameworks for training/inverting networks.
+    \item \textbf{Week 9}: Frontiers of Data-Driven Regularisation.
+    \item \textbf{Week 10}: Guest Lectures.
+\end{itemize}
+\end{frame}
+
+\section{Assessment \& Policies}
+
+\begin{frame}
+\frametitle{AI Assistance Policy}
+\begin{block}{Co-worker, not Pilot}
+    All types of AI assistance (LLMs, Copilots) are \textbf{allowed and encouraged}.
+\end{block}
+
+\begin{itemize}
+    \item \textbf{The Risk}: You are responsible for the output. Hallucinations are common in advanced math/code.
+    \item \textbf{The Method}: Do not work in isolation. Discuss AI findings with TAs, instructors, and peers.
+    \item \textbf{The Goal}: Learn to use AI as a productivity multiplier, not a solution generator.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Assessment Structure}
+\begin{enumerate}
+    \item \textbf{Formative Assessment (0\%)}
+    \begin{itemize}
+        \item Released Week 1, Due Week 2.
+        \item Designed to "get you going".
+        \item AI allowed, but try to solve manually first to understand the trade.
+    \end{itemize}
+    
+    \item \textbf{Coursework 1 (25\%)}
+    \begin{itemize}
+        \item Traditional computing tasks + Open-ended training task.
+        \item Goal: Achieve a quality metric that untrained methods cannot.
+    \end{itemize}
+    
+    \item \textbf{Coursework 2 (25\%)}
+    \begin{itemize}
+        \item \textbf{Deblurring Challenge}.
+        \item Competitive ranking based on quality metrics on unseen data.
+    \end{itemize}
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Coursework 3 (Final Assessment)}
+\begin{alertblock}{Coursework 3 (50\%) -- The "Exam" Component}
+    \begin{itemize}
+        \item \textbf{Format}: In-person supervised session (Likely Tue, April 21).
+        \item \textbf{Duration}: 2 hours.
+        \item \textbf{Content}: Mixture of Multiple Choice Questions and Coding Exercises.
+        \item \textbf{Restrictions}: \textbf{NO} Internet access. \textbf{NO} AI assistance.
+        \item \textit{Note: This ensures you understand the fundamental concepts without reliance on external tools.}
+    \end{itemize}
+\end{alertblock}
+\end{frame}
+
+\section{Next Steps}
+
+\begin{frame}
+\frametitle{Coming up this week...}
+\begin{itemize}
+    \item \textbf{Next}: Two more 50-minute blocks on \textit{Introduction to Inverse Problems}.
+    \begin{itemize}
+        \item What makes inverse problems ill-posed?
+        \item Stability and regularisation fundamentals.
+    \end{itemize}
+    \item \textbf{Friday Practical}: First Computer Practical (14:00--16:00).
+    \begin{itemize}
+        \item Introduction to the Formative Assessment.
+        \item Set up your coding environment.
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Before next week, please...}
+\begin{itemize}
+    \item \textbf{Log in to Moodle} and check your access.
+    \item \textbf{Star/Fork the GitHub Repository} to track updates.
+    \item \textbf{Download the Lecture Notes} (Release v1.0).
+    \item Familiarise yourself with the assessment structure.
+\end{itemize}
+
+\vspace{1cm}
+\centering
+\Large \textbf{Questions?}
 \end{frame}
 
 \end{document}
