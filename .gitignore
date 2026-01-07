@@ -13,6 +13,9 @@
 # Exception: Allow image PDFs in Common_Images to be tracked
 !Common_Images/**/*.pdf
 
+# Exception: Allow banner PDFs in Template folder to be tracked
+!Slides/Template/banners/*.pdf
+
 # System files
 .DS_Store
 Thumbs.db
