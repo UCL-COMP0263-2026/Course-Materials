@@ -1,0 +1,438 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\DeclareMathOperator*{\argmin}{argmin}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows} 
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Handy shorthand
+\newcommand{\norm}[1]{\left\| #1 \right\|}
+\newcommand{\inner}[2]{\left\langle #1, #2 \right\rangle}
+\newcommand{\ip}[2]{\left\langle #1, #2 \right\rangle}
+\newcommand{\R}{\mathbb{R}}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+%================================================================%
+% Title Info
+%================================================================%
+\title{Generalised Inverses and Instability}
+\subtitle{Solving Inverse Problems with Data-Driven Models}
+\author[Martin Benning]{Martin Benning}
+\date{COMP0263 -- Inverse Problems}
+\institute{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Overview ---
+\begin{frame}
+\frametitle{Lecture Overview}
+\begin{block}{Objectives}
+    In the previous lecture, we defined Inverse Problems ($Ku=f$) and discussed Hadamard's / John's conditions for well-posedness. Today, we address the mathematical tools required when these conditions fail.
+\end{block}
+
+\tableofcontents
+\end{frame}
+
+\section{Recap: Well-Posedness}
+
+\begin{frame}
+\frametitle{Recap: The Inverse Problem}
+We consider the operator equation
+\vspace{-0.2cm}
+\begin{align*}
+    K u = f
+\end{align*}
+\vspace{-0.6cm}
+\begin{itemize}
+    \item $u$: Unknown physical quantity (Cause).
+    \item $f$: Measurement data (Effect).
+    \item $K$: Forward operator (Model).
+\end{itemize}
+
+\pause
+\begin{block}{Well-Posedness (Hadamard \cite{hadamard1902problemes,hadamard1923lectures}, John \cite{john1960continuous})}
+    A problem is well-posed if:
+    \begin{enumerate}
+        \item \textbf{Existence:} A solution exists for all data.
+        \item \textbf{Uniqueness:} The solution is unique.
+        \item \textbf{Stability:} The solution depends continuously on the data.
+    \end{enumerate}
+\end{block}
+
+\vspace{-0.2cm}
+If any condition is violated, the problem is \textbf{ill-posed}. The third condition is often the hardest to secure in applications.
+\end{frame}
+
+\section{Generalised Inverses}
+
+\begin{frame}
+\frametitle{When Classical Inversion Fails}
+For a linear operator $K: \mathcal{U} \to \mathcal{V}$, a classical inverse $K^{-1}$ requires $K$ to be a bijection (injective and surjective). In inverse problems, this rarely holds.
+
+\vspace{1em}
+We distinguish two failure modes regarding the first two Hadamard conditions:
+\begin{enumerate}
+    \item \textbf{Non-existence:} $f$ is not in the range of $K$ (e.g., due to noise).
+    \item \textbf{Non-uniqueness:} $K$ has a non-trivial null space.
+\end{enumerate}
+
+\vspace{1em}
+\textbf{Goal:} Define a ``best-fit'' inverse that handles these cases.
+\end{frame}
+
+\begin{frame}
+\frametitle{Example: Non-Existence}
+Consider the matrix equation $Ku=f$ where $K$ is rank-deficient:
+$$ K = \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix}, \quad f = \begin{pmatrix} 3 \\ 5 \end{pmatrix} $$
+\pause
+The range of $K$ is spanned by $(1, 2)^\top$.
+\begin{itemize}
+    \item $f = (3, 5)^\top$ is \textbf{not} a multiple of $(1, 2)^\top$.
+    \item The system implies $u_1 + 2u_2 = 3$ and $2u_1 + 4u_2 = 5$ (which implies $u_1 + 2u_2 = 2.5$).
+    \item Contradiction $\implies$ No solution exists.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Example: Non-Uniqueness}
+Consider the same matrix $K$ but with data in the range:
+$$ K = \begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix}, \quad f = \begin{pmatrix} 3 \\ 6 \end{pmatrix} $$
+\pause
+\begin{itemize}
+    \item $f = 3 \cdot (1, 2)^\top$, so a solution exists.
+    \item The system reduces to one equation: $u_1 + 2u_2 = 3$.
+    \item \textbf{Infinitely many solutions:} $u^{(1)} = (3, 0)^\top$, $u^{(2)} = (1, 1)^\top$, etc.
+    \item The null space is $\mathcal{N}(K) = \text{span} \{ (-2, 1)^\top \}$.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{The Moore-Penrose Inverse}
+We introduce the \textbf{Moore-Penrose inverse} $K^\dagger$ to resolve these issues. The solution $u^\dagger = K^\dagger f$ is defined by:
+
+\begin{enumerate}
+    \item \textbf{Least Squares (Resolves Existence):} 
+    First, find the set of $u$ that minimise the residual error:
+    $$ \min_u \| Ku - f \|_{\mathcal{V}}^2 $$
+    These solutions satisfy the \textbf{Normal Equation}: $K^* K u = K^* f$.
+
+    \pause
+    \item \textbf{Minimal Norm (Resolves Uniqueness):}
+    Among all least-squares solutions, pick the one with the smallest norm:
+    $$ u^\dagger = \argmin_{u} \left\{ \|u\|_{\mathcal{U}} \mid K^* K u = K^* f \right\} $$
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Calculations for the Examples}
+Let's apply $K^\dagger$ to our problematic examples.
+First, compute the normal equation components:
+$$ K^* K = \begin{pmatrix} 5 & 10 \\ 10 & 20 \end{pmatrix} $$
+
+\pause
+\textbf{Case 1 (Non-existence):} $f = (3, 5)^\top \implies K^*f = (13, 26)^\top$.
+Normal equation: $5u_1 + 10u_2 = 13 \implies u_1 + 2u_2 = 13/5$.
+Minimal norm solution (orthogonal to null space): $u^\dagger = \frac{1}{25}(13, 26)^\top$.
+
+\pause
+\textbf{Case 2 (Non-uniqueness):} $f = (3, 6)^\top \implies K^*f = (15, 30)^\top$.
+Normal equation: $5u_1 + 10u_2 = 15 \implies u_1 + 2u_2 = 3$.
+Minimal norm solution: $u^\dagger = \frac{1}{5}(3, 6)^\top$.
+
+\pause
+\vspace{0.5em}
+The Moore-Penrose inverse restores existence and uniqueness.
+\end{frame}
+
+\section{Singular Value Decomposition (SVD)}
+
+\begin{frame}
+\frametitle{SVD for Matrices}
+To understand stability, we need the Singular Value Decomposition (SVD).
+For a matrix $K \in \mathbb{R}^{m \times n}$, the SVD is
+$$ K = V \Sigma U^\top $$
+\begin{itemize}
+    \item $U \in \mathbb{R}^{n \times n}$: Orthogonal matrix (Input space singular vectors).
+    \item $V \in \mathbb{R}^{m \times m}$: Orthogonal matrix (Output space singular vectors).
+    \item $\Sigma$: Diagonal matrix of singular values $\sigma_1 \ge \sigma_2 \ge \dots \ge 0$.
+\end{itemize}
+
+\begin{block}{Notation Convention}
+    We use $U$ for the input space (domain) and $V$ for the output space (codomain), such that $K u_j = \sigma_j v_j$.
+\end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{SVD Visualisation}
+The SVD decomposes the action of $K$ into a rotation ($U^\top$), a scaling ($\Sigma$), and another rotation ($V$).
+
+\only<1>{\begin{center}
+    \includegraphics[width=0.58\linewidth]{svd_illustration.png}
+\end{center}
+
+{\tiny Image generated with Nano Banana Pro.}}
+
+\only<2->{We can write $K$ as a sum of rank-one matrices:
+$$ K = \sum_{j=1}^r \sigma_j v_j u_j^\top $$}
+\end{frame}
+
+\begin{frame}
+\frametitle{Low-Rank Approximation}
+The SVD allows us to approximate $K$. The best rank-$k$ approximation $K_k$ is obtained by keeping the largest $k$ singular values:
+$$ K_k = \sum_{j=1}^k \sigma_j v_j u_j^\top $$
+
+\begin{block}{Eckart–Young–Mirsky Theorem}
+    The error of the approximation is determined by the discarded singular values:
+    $$ \| K - K_k \|_{\text{Fro}}^2 = \sum_{j=k+1}^r \sigma_j^2 $$
+\end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{SVD for Compact Operators}
+Inverse problems often involve operators on infinite-dimensional Hilbert spaces (e.g., integration).
+A \textbf{Singular System} $\{ (\sigma_j, u_j, v_j) \}$ for a compact operator $K$ satisfies:
+\begin{align*}
+    K u_j &= \sigma_j v_j \\
+    K^* v_j &= \sigma_j u_j
+\end{align*}
+where $\sigma_j \to 0$ as $j \to \infty$.
+
+The operator action is represented as:
+$$ K u = \sum_{j=1}^\infty \sigma_j \inner{u}{u_j}_{\mathcal{U}} v_j $$
+\end{frame}
+
+\begin{frame}{SVD of Integration Operator: The Setup}
+    \frametitle{SVD for Integration: The Forward Operator}
+    We revisit the inverse problem of differentiation.
+    The forward operator $K: L^2([0,1]) \rightarrow L^2([0,1])$ is the integration operator
+    $$ (Ku)(y) = \int_{0}^{y} u(x)dx \, . $$\pause
+    This can be written as an integral operator with kernel $k(x,y)$, i.e.
+    $$ (Ku)(y) = \int_{0}^{1} k(x,y)u(x)dx, \quad \text{where } k(x,y) = \begin{cases} 1 & \text{if } x \le y \\ 0 & \text{if } x > y \end{cases} \, . $$\pause
+    This operator $K$ is compact. Our goal is to find its SVD.
+\end{frame}
+
+\begin{frame}{SVD of Integration Operator: Adjoint $K^*$}
+    \frametitle{Computing the Adjoint Operator $K^*$}
+    The adjoint operator $K^*$ is defined by $\ip{Ku}{v}_{L^2([0,1])} = \ip{u}{K^*v}_{L^2([0,1])}$. We observe
+    \begin{align*}
+        \ip{Ku}{v} &= \int_{0}^{1} \left( \int_{0}^{y} u(x)dx \right) v(y)dy\\
+                   &= \int_{0}^{1} \int_{0}^{1} k(x,y)u(x)v(y)dx dy\\
+                   &= \int_{0}^{1} u(x) \left( \int_{x}^{1} v(y)dy \right) dx
+    \end{align*}\pause
+    Thus, the adjoint operator $K^*: L^2([0,1]) \rightarrow L^2([0,1])$ is given by
+    $$ (K^*v)(x) = \int_{x}^{1} v(y)dy \, . $$
+\end{frame}
+
+\begin{frame}{SVD of Integration Operator: Operator $K^*K$}
+    \frametitle{The Operator $K^*K$ and Eigenvalue Problem}
+    Next, we form the operator $K^*K$, i.e.
+    \begin{align*}
+        (K^*Ku)(x) &= K^* \left( (Ku)(\cdot) \right) (x)\\                
+                   &= \int_{x}^{1} \left( \int_{0}^{y} u(z)dz \right) dy \, .
+    \end{align*}\pause
+    We seek eigenvalues $\lambda = \sigma^2 > 0$ and eigenfunctions $u \in L^2([0,1])$ for $K^*K$, i.e.
+    $$ K^*Ku = \lambda u \, . $$\pause
+    This leads to the solving the integral equation
+    $$ \int_{x}^{1} \left( \int_{0}^{y} u(z)dz \right) dy = \lambda u(x) \, . $$
+\end{frame}
+
+\begin{frame}{SVD of Integration Operator: ODE and Boundary Conditions}
+    \frametitle{Deriving the ODE and Boundary Conditions}
+    \begin{itemize}
+        \item<1-> Differentiating with respect to $x$ (using Leibniz integral rule) yields
+        $$ \lambda u'(x) = - \int_{0}^{x} u(z)dz \, . $$
+        From this, setting $x=0$, we get $u'(0) = 0$.
+        \item<2-> Differentiating again with respect to $x$ gives $ \lambda u''(x) = -u(x)$.
+        This leads to the following Ordinary Differential Equation (ODE):
+        $$ \lambda u''(x) + u(x) = 0 $$
+        \item<3-> From the integral equation for $\lambda u(x)$, if we set $x=1$, the outer integral vanishes, i.e. $\lambda u(1) = 0$. Since we seek $\lambda > 0$, we must have $u(1) = 0$.
+    \end{itemize}\only<4->{
+    \begin{alertblock}{Summary of ODE Problem}
+      We need to solve $\lambda u''(x) + u(x) = 0$ with boundary conditions $u'(0)=0$ and $u(1)=0$.
+    \end{alertblock}}
+\end{frame}
+
+\begin{frame}{SVD of Integration Operator: Solving the ODE}
+    \frametitle{Singular Values $\sigma_j$ and Orthonormal Functions $u_j$}
+    The general solution to $u''(x) + \frac{1}{\lambda}u(x) = 0$ is $u(x) = c_1 \sin(x/\sqrt{\lambda}) + c_2 \cos(x/\sqrt{\lambda})$. Let $\sigma := \sqrt{\lambda}$.
+    \begin{itemize}
+        \item<1-> Apply $u'(0)=0$:
+            $u'(x) = \frac{c_1}{\sigma}\cos(x/\sigma) - \frac{c_2}{\sigma}\sin(x/\sigma)$.
+            $u'(0) = \frac{c_1}{\sigma} = 0 \implies c_1 = 0$.
+            So, $u(x) = c_2 \cos(x/\sigma)$.
+        \item<2-> Apply $u(1)=0$:
+            $c_2 \cos(1/\sigma) = 0$. For non-trivial solutions ($c_2 \ne 0$), we require $\cos(1/\sigma) = 0$.
+            This means $1/\sigma = (j - \frac{1}{2})\pi$ for $j \in \mathbb{N}$.
+    \end{itemize}
+    \onslide<3->{The singular values are $\sigma_j = \frac{1}{(j-\frac{1}{2})\pi} = \frac{2}{(2j-1)\pi}$ for $j \in \mathbb{N}$.}
+    \onslide<4->{The corresponding normalised eigenfunctions $u_j(x)$ (after choosing $c_2=\sqrt{2}$ for normalisation) are
+    $$ u_j(x) = \sqrt{2} \cos\left(\left(j-\frac{1}{2}\right)\pi x\right) \, . $$}
+\end{frame}
+
+\begin{frame}{SVD of Integration Operator: Singular Functions $v_j$}
+    \frametitle{Computing Orthonormal Functions $v_j$}
+    The singular functions $v_j$ are obtained via $v_j = \frac{1}{\sigma_j} K u_j$, i.e.
+    \begin{align*}
+        (Ku_j)(x) &= \int_{0}^{x} u_j(y) dy = \int_{0}^{x} \sqrt{2} \cos\left(\left(j-\frac{1}{2}\right)\pi y\right) dy \, , \\
+                 &= \sqrt{2} \left[ \frac{\sin((j-\frac{1}{2})\pi y)}{(j-\frac{1}{2})\pi} \right]_0^x = \sqrt{2} \frac{\sin((j-\frac{1}{2})\pi x)}{(j-\frac{1}{2})\pi} \, , \\
+                 &= \sigma_j \sqrt{2} \sin\left(\left(j-\frac{1}{2}\right)\pi x\right) \, .
+    \end{align*}
+    \onslide<2->{Therefore,
+    $$ v_j(x) = \frac{1}{\sigma_j} (Ku_j)(x) = \sqrt{2} \sin\left(\left(j-\frac{1}{2}\right)\pi x\right) \, . $$}
+\end{frame}
+
+\begin{frame}{SVD of Integration Operator: Summary & Consequences}
+    \frametitle{SVD Summary for Integration Operator}
+    For the integration operator $K: L^2([0,1]) \rightarrow L^2([0,1])$, $(Ku)(y) = \int_0^y u(x)dx$:
+    \begin{itemize}
+        \item<1-> Singular values: $\sigma_j = 2/((2j-1)\pi)$ for $j \in \mathbb{N}$.
+        \item<2-> Orthonormal functions ($u_j$): $u_j(x) = \sqrt{2}\cos\left(\left(j-\frac{1}{2}\right)\pi x\right)$.
+        \item<3-> Orthonormal functions ($v_j$): $v_j(x) = \sqrt{2}\sin\left(\left(j-\frac{1}{2}\right)\pi x\right)$.
+    \end{itemize}
+    \onslide<4->{\begin{block}{Expansion of $Kw$}\vspace{-1.5em}      
+      \begin{align*} (Kw)(x) = \sum_{j=1}^{\infty} & \frac{2}{(2j-1)\pi} \left( \int_0^1 w(s) \sqrt{2}\cos\left(\left(j-\frac{1}{2}\right)\pi s\right) ds \right) \sqrt{2}\sin\left(\left(j-\frac{1}{2}\right)\pi x\right) \\
+      = \sum_{j=1}^{\infty} & \frac{4}{(2j-1)\pi} \left( \int_0^1 w(s) \cos\left(\left(j-\frac{1}{2}\right)\pi s\right) ds \right) \sin\left(\left(j-\frac{1}{2}\right)\pi x\right) \end{align*}
+    \end{block}}
+\end{frame}
+
+\section{Instability}
+
+\begin{frame}
+\frametitle{Moore-Penrose Inverse via SVD}
+Using the SVD, we can explicitly write the Moore-Penrose inverse:
+$$ K^\dagger f = \sum_{j=1}^\infty \frac{1}{\sigma_j} \inner{f}{v_j}_{\mathcal{V}} u_j $$
+
+\begin{alertblock}{Picard Criterion}
+    For $K^\dagger f$ to have a finite norm (to exist), the coefficients $\inner{f}{v_j}$ must decay faster than the singular values $\sigma_j$:
+    $$ \sum_{j=1}^\infty \frac{|\inner{f}{v_j}|^2}{\sigma_j^2} < \infty $$
+\end{alertblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Propagation of Noise}
+In practice, we observe noisy data $f^\delta = f + \eta$. The reconstruction is:
+$$ u^\delta = K^\dagger f + K^\dagger \eta = u_{\text{true}} + \sum_{j=1}^\infty \frac{1}{\sigma_j} \inner{\eta}{v_j} u_j $$
+
+The error term is:
+$$ \| u^\delta - u_{\text{true}} \|^2 = \sum_{j=1}^\infty \frac{|\inner{\eta}{v_j}|^2}{\sigma_j^2} $$
+
+\vspace{0.5em}
+	\textbf{The problem:} As $j \to \infty$, $\sigma_j \to 0$. The factor $1/\sigma_j$ explodes. Small noise components $\inner{\eta}{v_j}$ are heavily amplified.
+\end{frame}
+
+\begin{frame}
+\frametitle{Instability in Matrices (Ill-Conditioning)}
+For matrices, the sum is finite, but $1/\sigma_r$ (where $\sigma_r$ is the smallest singular value) can be huge.
+
+\begin{exampleblock}{Matrix Example}
+    $K = \begin{pmatrix} 1 & 1 \\ 1 & 1.001 \end{pmatrix}$, $\kappa \approx 4000$.
+    \begin{itemize}
+        \item True $f = (1, 1)^\top \implies u = (1, 0)^\top$.
+        \item Noisy $f^\delta = (1, 1.001)^\top$ (Noise $\approx 10^{-3}$).
+        \item Reconstructed $u^\delta \approx (-19, 20)^\top$.
+    \end{itemize}
+    Error is amplified by factor $\kappa$.
+\end{exampleblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Instability in Differentiation}
+Recall the integration operator where $\sigma_j \approx 1/j$. 
+Consider high-frequency noise $\eta_k(y) = \delta \sin(k y)$.
+
+\begin{itemize}
+    \item The data noise is small: $\|\eta_k\|_\infty = \delta$.
+    \item The derivative (inverse) is $k \delta \cos(k y)$.
+    \item The error is proportional to $k$.
+\end{itemize}
+
+% 
+Even if $\delta \to 0$, if $k$ is large enough, the error can be arbitrarily large. 
+\begin{center}
+    \textit{Differentiation amplifies high frequencies.}
+\end{center}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}
+\frametitle{Summary}
+\begin{enumerate}
+    \item \textbf{Generalised Inverses:} The Moore-Penrose inverse $K^\dagger$ resolves the existence and uniqueness issues of the inverse problem.
+    \item \textbf{SVD Analysis:} $K^\dagger$ can be expressed via the SVD.
+    \item \textbf{Instability:} The decay of singular values ($\sigma_j \to 0$) causes the ``Stability'' condition of John to fail.
+    \item \textbf{Result:} $K^\dagger$ is discontinuous (unbounded) for compact operators with infinite range.
+\end{enumerate}
+
+\vspace{1em}
+\textbf{Next Step:} We cannot just invert the operator. We must dampen the effect of small $\sigma_j$. This leads us to \textbf{Regularisation Theory}.
+\end{frame}
+
+\begin{frame}[allowframebreaks]
+\frametitle{References}
+\bibliographystyle{plain}
+\bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}

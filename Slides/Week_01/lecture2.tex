@@ -1,0 +1,427 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\DeclareMathOperator*{\argmin}{argmin}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows} 
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+\title{Introduction to Inverse Problems}
+\subtitle{Definitions, Ill-Posedness, and Instability}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Overview ---
+\begin{frame}
+\frametitle{Lecture Overview}
+\begin{block}{Objectives}
+    \begin{itemize}
+        \item Formal definition of Inverse Problems ($Ku=f$).
+        \item Hadamard's/John's concept of Well-Posedness.
+        \item Detailed mathematical analysis of Ill-Posedness.
+        \item Case Study 1: Matrix Inversion and Condition Numbers.
+        \item Case Study 2: Differentiation as an Inverse Problem.
+        \item Case Study 3: Deconvolution and Fourier Instability.
+        \item Case Study 4: Parameter Identification and Neural Networks.
+    \end{itemize}
+\end{block}
+\end{frame}
+
+\section{Introduction: The Inverse Problem}
+
+\begin{frame}
+\frametitle{The Forward Problem vs The Inverse Problem}
+\begin{block}{The Forward Model}
+    Given a physical quantity $u$ (the cause/input), the \textbf{forward problem} is to compute the observable data $f$ (the effect/output) via a model $K$.
+    $$ K(u) = f $$
+\end{block}
+
+\pause
+\begin{block}{The Inverse Problem}
+    The \textbf{inverse problem} is the task of retrieving the unknown quantity $u$ given the indirect measurements $f$ and the model $K$.
+    $$ \text{Given } f \text{ and } K, \text{ find } u \text{ such that } Ku = f. $$
+\end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{Mathematical Formulation}
+We formulate the problem as an operator equation:
+\begin{align}
+    K u = f \label{eq:invprob}
+\end{align}
+where:
+\begin{itemize}
+    \item $u \in \mathcal{U}$: The unknown solution lying in a Banach space $\mathcal{U}$.
+    \item $f \in \mathcal{V}$: The data lying in a Banach space $\mathcal{V}$.
+    \item $K \colon \mathcal{U} \to \mathcal{V}$: The operator mapping $\mathcal{U}$ to $\mathcal{V}$.
+\end{itemize}
+
+\vspace{1em}
+\textbf{Note:} For this lecture, we primarily assume $K$ is a \emph{linear, bounded operator}, though non-linear extensions (like Neural Networks) share similar properties.
+\end{frame}
+
+\begin{frame}
+\frametitle{Real-World Examples}
+Inverse problems are ubiquitous in science and engineering:
+
+\begin{itemize}
+    \item \textbf{Medical Imaging:}
+    \begin{itemize}
+        \item \emph{CT:} Recover tissue density from X-ray attenuation (Radon Transform).
+        \item \emph{MRI:} Recover proton density from Fourier coefficients.
+    \end{itemize}
+    \item \textbf{Image Processing:}
+    \begin{itemize}
+        \item \emph{Deblurring:} Recover sharp image from blurred observation.
+        \item \emph{Inpainting:} Recover missing pixels.
+    \end{itemize}
+    \item \textbf{Geophysics:} Determining underground structure from seismic waves.
+    \item \textbf{Machine Learning:} Learning model parameters from data.
+\end{itemize}
+\end{frame}
+
+\section{Well-Posedness and Ill-Posedness}
+
+\begin{frame}
+\frametitle{Hadamard's Definition of Well-Posedness}
+The notion of well-posedness is commonly attributed to Jacques Hadamard\,\cite{hadamard1902problemes,hadamard1923lectures}. The modern emphasis and clear articulation of the \emph{stability} requirement was further clarified in subsequent work, notably by John\,\cite{john1960continuous}.
+
+\begin{theoremblock}{Definition: Well-Posed Problem (Hadamard)}
+    The problem $K u = f$ is \textbf{well-posed} if:
+    \begin{enumerate}
+        \item \textbf{Existence:} For every $f \in \mathcal{V}$, there exists a solution $u \in \mathcal{U}$ (i.e., $K$ is surjective).
+        \item \textbf{Uniqueness:} The solution $u$ is unique (i.e., $K$ is injective).
+        \item \textbf{Stability:} The solution $u$ depends continuously on the data $f$. That is, $K^{-1}$ is continuous.
+    \end{enumerate}
+\end{theoremblock}
+
+If \textbf{any} of these conditions are violated, the problem is called \textbf{ill-posed}.
+\end{frame}
+
+\begin{frame}
+\frametitle{Analyzing the Conditions}
+\begin{itemize}
+    \item \textbf{Violation of Existence:} The observed data $f$ might contain noise $\eta$, such that $f + \eta$ is no longer in the range of the ideal physics model $K$.
+    $$ f_{\text{noisy}} \notin \text{Range}(K) $$
+    \item \textbf{Violation of Uniqueness:} There may be non-trivial elements in the null-space, $Ku_0 = 0$. Then $u + u_0$ is also a solution.
+    \item \textbf{Violation of Stability:} This is the most critical issue in numerical inversion. Small errors in measurement can map to massive errors in reconstruction.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Stability vs Continuity}
+Mathematically, stability is equivalent to the continuity of the inverse mapping $K^{-1}$.
+
+\begin{block}{Continuity Condition}
+    For a sequence of data $f_n \to f$ in $\mathcal{V}$, we require the solutions $u_n = K^{-1}f_n$ to converge to $u = K^{-1}f$ in $\mathcal{U}$.
+    $$ \| f_n - f \|_{\mathcal{V}} \to 0 \implies \| u_n - u \|_{\mathcal{U}} \to 0 $$
+\end{block}
+
+In ill-posed problems, we can have $\| f_n - f \|_{\mathcal{V}} \approx \epsilon$ (very small) but $\| u_n - u \|_{\mathcal{U}} \to \infty$.
+\end{frame}
+
+\section{Case Study 1: Matrix Inversion}
+
+\begin{frame}
+\frametitle{Linear Systems as Inverse Problems}
+Consider the finite-dimensional case where $K \in \mathbb{R}^{n \times n}$ is a symmetric, positive definite matrix.
+$$ Ku = f $$
+We solve for $u$ via spectral decomposition. Let $(\lambda_j, v_j)$ be the eigenvalue-eigenvector pairs of $K$, with $\lambda_1 \ge \lambda_2 \ge \dots \ge \lambda_n > 0$.
+
+The solution is given by:
+$$ u = \sum_{j=1}^n \frac{1}{\lambda_j} \langle f, v_j \rangle v_j $$
+\end{frame}
+
+\begin{frame}
+\frametitle{Impact of Noise on Linear Systems}
+Suppose we measure noisy data $f^\delta$ with error $\delta$:
+$$ \| f - f^\delta \|_2 \le \delta $$
+The reconstructed solution from noisy data is $u^\delta = K^{-1}f^\delta$.
+
+\begin{block}{Error Estimation}
+The error in the solution is bounded by the smallest eigenvalue:
+$$ \| u - u^\delta \|_2 = \| K^{-1}(f - f^\delta) \|_2 \le \|K^{-1}\|_2 \delta = \frac{1}{\lambda_n} \delta $$
+\end{block}
+
+If $\lambda_n \approx 0$ (the matrix is "almost" singular), the error multiplier $1/\lambda_n$ becomes huge.
+\end{frame}
+
+\begin{frame}
+\frametitle{Condition Number}
+The sensitivity of the linear system is measured by the \textbf{condition number} $\kappa(K)$.
+$$ \kappa(K) = \|K\| \|K^{-1}\| = \frac{\lambda_1}{\lambda_n} $$
+
+\begin{itemize}
+    \item A problem is \textbf{ill-conditioned} if $\kappa(K)$ is very large.
+    \item In discretised inverse problems (e.g., discretised integral equations), $\lambda_n \to 0$ as the grid becomes finer ($n \to \infty$).
+    \item \textbf{Paradox:} Discretising more finely to get a "better" solution often makes the numerical inversion more unstable.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Numerical Example}
+\begin{exampleblock}{An Ill-Conditioned Matrix}
+    Consider $K = \begin{pmatrix} 1 & 1 \\ 1 & 1.001 \end{pmatrix}$ and $f = \begin{pmatrix} 2 \\ 2 \end{pmatrix}$. True solution: $u = \begin{pmatrix} 2 \\ 0 \end{pmatrix}$.
+    \pause
+    Now consider perturbed data $f^\delta = \begin{pmatrix} 2 \\ 2.001 \end{pmatrix}$.
+    \begin{itemize}
+        \item Inverse $K^{-1} \approx \begin{pmatrix} 1000 & -1000 \\ -1000 & 1000 \end{pmatrix}$.
+        \item Perturbed solution: $u^\delta = K^{-1} f^\delta = \begin{pmatrix} 1 \\ 1 \end{pmatrix}$.
+    \end{itemize}
+    \pause
+    \textbf{Result:} A $0.05\%$ change in data caused a $100\%$ relative error in the solution.
+\end{exampleblock}
+\end{frame}
+
+\section{Case Study 2: Differentiation}
+
+\begin{frame}
+\frametitle{Differentiation as an Inverse Problem}
+Consider the problem of finding the derivative $u(x)$ of a function $f(y)$. This is the inverse of integration.
+
+\begin{block}{The Forward Operator (Integration)}
+    Let $K: C[0,1] \to C[0,1]$ be defined by:
+    $$ (Ku)(y) = \int_0^y u(x) dx = f(y) $$
+    where we assume $f(0)=0$.
+\end{block}
+
+\textbf{Goal:} Recover $u = f'$ from data $f$.
+\end{frame}
+
+\begin{frame}
+\frametitle{High-Frequency Noise Instability}
+Suppose our data is contaminated by a small, high-frequency perturbation:
+$$ f^\delta(y) = f(y) + \delta \sin\left(\frac{k y}{\delta}\right) $$
+where $\delta > 0$ is the amplitude and $k/\delta$ is the frequency.
+
+\begin{itemize}
+    \item \textbf{Data Error:} In the maximum norm ($L^\infty$), the error is small:
+    $$ \| f - f^\delta \|_\infty = \delta $$
+    This goes to 0 as $\delta \to 0$.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Differentiation Explodes Noise}
+Now, let's compute the solution $u^\delta$ by differentiating the noisy data:
+\begin{align*}
+    u^\delta(y) &= \frac{d}{dy} f^\delta(y) = f'(y) + \frac{d}{dy} \left[ \delta \sin\left(\frac{k y}{\delta}\right) \right] \\
+    &= u(y) + \delta \cdot \frac{k}{\delta} \cos\left(\frac{k y}{\delta}\right) \\
+    &= u(y) + k \cos\left(\frac{k y}{\delta}\right)
+\end{align*}
+
+\vspace{-0.25cm}
+
+\pause
+\begin{alertblock}{The Instability Result}
+    The error in the solution is
+    $$ \| u - u^\delta \|_\infty = k $$
+    Even if $\delta \to 0$, if $k > 0$, the error is not zero. Hence, differentiation is discontinuous.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Compactness and Singular Values}
+This instability is structurally caused by the properties of the operator $K$.
+\begin{itemize}
+    \item The integration operator $K$ is a \textbf{compact operator}.
+    \item Compact operators map bounded sets to relatively compact sets (they "smooth" out functions).
+    \item The inverse of a compact operator (on an infinite-dimensional space) must be \textbf{unbounded}.
+\end{itemize}
+
+This suggests that for \emph{any} inverse problem involving a smoothing forward model (integration, convolution), the inverse problem is ill-posed.
+\end{frame}
+
+\section{Case Study 3: Deconvolution}
+
+\begin{frame}
+\frametitle{Convolution and Deblurring}
+Many imaging systems (cameras, microscopes) are modelled by a convolution:
+$$ (Ku)(x) = \int_{\mathbb{R}^d} g(x - y) u(y) dy = (g * u)(x) = f(x) $$
+where $g$ is the Point Spread Function (PSF) or blur kernel.
+
+\begin{block}{Fourier Domain Formulation}
+Applying the Fourier Transform, convolution becomes multiplication:
+$$ \hat{f}(\xi) = \hat{g}(\xi) \cdot \hat{u}(\xi) $$
+\end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{Naive Inversion in Fourier Domain}
+The direct inversion suggests dividing by the kernel in the Fourier domain:
+$$ \hat{u}(\xi) = \frac{\hat{f}(\xi)}{\hat{g}(\xi)} $$
+
+\textbf{The Problem:}
+Real-world blur kernels $g$ are smooth (e.g., Gaussian).
+\begin{itemize}
+    \item The Fourier coefficients $\hat{g}(\xi)$ decay rapidly to zero as $|\xi| \to \infty$.
+    \item $\hat{g}(\xi) \approx 0$ for high frequencies.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Effect of Noise on Deconvolution}
+With noisy data $f^\delta = f + \eta$:
+$$ \hat{u}^\delta(\xi) = \frac{\hat{f}(\xi) + \hat{\eta}(\xi)}{\hat{g}(\xi)} = \hat{u}(\xi) + \underbrace{\frac{\hat{\eta}(\xi)}{\hat{g}(\xi)}}_{\text{Noise Term}} $$
+
+\begin{itemize}
+    \item Noise $\eta$ is typically "white", meaning $\hat{\eta}(\xi)$ does not decay.
+    \item Since $\hat{g}(\xi) \to 0$, the ratio $\frac{\hat{\eta}(\xi)}{\hat{g}(\xi)} \to \infty$.
+\end{itemize}
+
+
+
+\begin{theoremblock}{Result}
+    Direct deconvolution amplifies high-frequency noise, drowning out the actual signal (edges/textures).
+\end{theoremblock}
+\end{frame}
+
+\section{Case Study 4: Parameter Identification}
+
+\begin{frame}
+\frametitle{Parameter Identification Problems}
+Inverse problems are not limited to finding a signal $u$. Often, we wish to find the \textbf{parameters} of a system.
+
+\begin{block}{The Setup}
+    Consider a differential equation (forward model) that depends on a parameter $\theta$:
+    $$ \mathcal{L}(u; \theta) = 0 $$
+
+    \vspace{-0.5cm}
+    \begin{itemize}
+        \item \textbf{Forward:} Given $\theta$, solve for state $u$.
+        \item \textbf{Inverse:} Given observations of state $u_{\text{obs}}$, find parameter $\theta$.
+    \end{itemize}
+\end{block}
+
+Examples:
+\begin{itemize}
+    \item Finding conductivity $a(x)$ in the heat equation $\nabla \cdot (a(x) \nabla u) = 0$ (EIT).
+    \item Learning weights in a Neural Network.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Neural Networks as Inverse Problems}
+Training a neural network is a non-linear parameter identification problem.
+
+\begin{itemize}
+    \item \textbf{Unknown ($u$ in our notation):} The network weights $\theta \in \mathbb{R}^N$.
+    \item \textbf{Forward Operator ($K$):} The network architecture $N_\theta$ applied to input data $X$.
+    $$ K(\theta) = N_\theta(X) $$
+    \item \textbf{Data ($f$):} The labels or ground truth $Y$.
+\end{itemize}
+
+The problem is to solve $K(\theta) \approx Y$.
+\end{frame}
+
+\begin{frame}
+\frametitle{Ill-Posedness in Deep Learning}
+Is training a Neural Network well-posed?
+\begin{enumerate}
+    \item \textbf{Existence:} Depending on the capacity, there may be no $\theta$ that perfectly fits $Y$ (underfitting), or many.
+    \item \textbf{Uniqueness:} Deep networks are highly over-parameterised.
+    $$ \text{Null}(K) \text{ is massive.} $$
+    Different weight configurations $\theta_1, \theta_2$ can produce identical outputs.
+    \item \textbf{Stability:} Adversarial examples show that small changes in input can lead to large changes in output, but also, the training landscape is non-convex.
+\end{enumerate}
+
+We treat this via \textbf{optimisation} rather than direct inversion:
+$$ \theta^* = \argmin_\theta \| K(\theta) - Y \|^2 + \lambda R(\theta) $$
+where $R(\theta)$ is a regularisation function (e.g., weight decay). More about this at a later stage!
+\end{frame}
+
+\section{Summary}
+
+\begin{frame}
+\frametitle{Summary of Key Concepts}
+\begin{itemize}
+    \item \textbf{Inverse Problems} involve recovering a cause from an observed effect: $Ku=f$.
+    \item \textbf{Hadamard/John Well-Posedness} requires Existence, Uniqueness, and Stability.
+    \item \textbf{Ill-Posedness} usually manifests as \textbf{Instability}:
+    \begin{itemize}
+        \item Small noise in data $\to$ Large error in solution.
+        \item Caused by properties of $K$ (e.g., smoothing, compact operator, small eigenvalues).
+        \item High-frequency noise is the primary enemy.
+    \end{itemize}
+    \item \textbf{Examples:} Matrix Inversion, Differentiation, Deconvolution, and Parameter Identification (Neural Networks).
+\end{itemize}
+
+\vspace{1em}
+\textbf{Next Week:} Since direct inversion fails, we need \textbf{Regularisation} to stabilise the solution.
+\end{frame}
+
+\begin{frame}[allowframebreaks]
+ \frametitle{References}
+ \scriptsize
+ \bibliographystyle{plain}
+ % Using standard references for this domain typically found in such courses
+ \nocite{ehn} % Engl Hanke Neubauer
+ \nocite{Rudin1991} % Rudin Functional Analysis
+ \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}

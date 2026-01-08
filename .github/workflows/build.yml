@@ -15,6 +15,7 @@ jobs:
     outputs:
       lecture-notes-changed: ${{ steps.check.outputs.lecture-notes }}
       slides-changed: ${{ steps.check.outputs.slides }}
+      weeks: ${{ steps.weeks.outputs.weeks }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,6 +35,17 @@ jobs:
             echo "slides=false" >> $GITHUB_OUTPUT
           fi
         continue-on-error: true
+
+      - name: Discover week folders
+        id: weeks
+        run: |
+          weeks=$(find Slides -maxdepth 1 -type d -name 'Week_*' -printf '%f\n' | sort)
+          if [ -z "$weeks" ]; then
+            weeks='Week_01'
+          fi
+          # Extract the numeric suffix to keep matrix concise (e.g., Week_01 -> 01)
+          week_nums=$(printf '%s\n' $weeks | sed 's/Week_//' | jq -R . | jq -s .)
+          echo "weeks=$week_nums" >> $GITHUB_OUTPUT
 
   build-lecture-notes:
     needs: check-changes
@@ -89,21 +101,34 @@ jobs:
       contents: write
     strategy:
       matrix:
-        week: ['01']
+        week: ${{ fromJson(needs.check-changes.outputs.weeks) }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Collect slide sources (Week ${{ matrix.week }})
+        id: slide-list
+        working-directory: Slides/Week_${{ matrix.week }}
+        run: |
+          files=$(ls lecture*.tex)
+          printf '%s\n' "$files" | jq -R . | jq -s .
+          echo "ROOT_FILES<<'EOF'" >> $GITHUB_ENV
+          printf '%s\n' "$files" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Compile Slides (Week ${{ matrix.week }})
         uses: xu-cheng/latex-action@v3
         with:
-          root_file: lecture1.tex
+          root_file: ${{ env.ROOT_FILES }}
           working_directory: Slides/Week_${{ matrix.week }}
 
       - name: Rename and upload Slides PDF
         if: success()
         run: |
           TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-          cp Slides/Week_${{ matrix.week }}/lecture1.pdf "COMP0263_Slides_Week_${{ matrix.week }}_${TIMESTAMP}.pdf"
+          for pdf in Slides/Week_${{ matrix.week }}/lecture*.pdf; do
+            base=$(basename "$pdf" .pdf)
+            cp "$pdf" "COMP0263_Slides_Week_${{ matrix.week }}_${base}_${TIMESTAMP}.pdf"
+          done
 
       - name: Upload Slides to Release
         if: success() && github.event_name == 'push'
@@ -121,5 +146,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: compiled-pdfs-slides-week-${{ matrix.week }}
-          path: Slides/Week_${{ matrix.week }}/lecture1.pdf
+          path: |
+            Slides/Week_${{ matrix.week }}/lecture*.pdf
+            COMP0263_Slides_Week_${{ matrix.week }}_*.pdf
           retention-days: 30
