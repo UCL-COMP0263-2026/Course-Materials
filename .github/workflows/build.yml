@@ -111,7 +111,7 @@ jobs:
         run: |
           files=$(ls lecture*.tex)
           printf '%s\n' "$files" | jq -R . | jq -s .
-          echo "ROOT_FILES<<'EOF'" >> $GITHUB_ENV
+          echo "ROOT_FILES<<EOF" >> $GITHUB_ENV
           printf '%s\n' "$files" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
