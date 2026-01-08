@@ -44,7 +44,7 @@ jobs:
             weeks='Week_01'
           fi
           # Extract the numeric suffix to keep matrix concise (e.g., Week_01 -> 01)
-          week_nums=$(printf '%s\n' $weeks | sed 's/Week_//' | jq -R . | jq -s .)
+          week_nums=$(printf '%s\n' $weeks | sed 's/Week_//' | jq -R . | jq -s -c .)
           echo "weeks=$week_nums" >> $GITHUB_OUTPUT
 
   build-lecture-notes:
