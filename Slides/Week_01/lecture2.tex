@@ -122,6 +122,27 @@ where:
 
 \vspace{1em}
 \textbf{Note:} For this lecture, we primarily assume $K$ is a \emph{linear, bounded operator}, though non-linear extensions (like Neural Networks) share similar properties.
+
+Some useful references: \cite{ehn,scherzer2009variational,benning2018modern}
+\end{frame}
+
+\begin{frame}{Inverse Problems: A Visual Illustration}
+  \begin{minipage}[t]{0.48\textwidth}
+    \centering
+    \vspace{0pt}
+    \includegraphics[width=\textwidth,height=0.9\textheight,keepaspectratio]{introduction/shadow_puppets.png}
+  \end{minipage}%
+  \hfill%
+  \begin{minipage}[t]{0.48\textwidth}
+    \vspace{0pt}
+    \begin{block}{The Shadow Image Problem}
+      \begin{itemize}
+        \item<1-> \textbf{Forward Problem}: Given 3D hand shapes, compute 2D shadows
+        \item<2-> \textbf{Inverse Problem}: Given only the 2D shadow silhouettes, determine the original 3D object
+        \item<3-> Multiple different 3D objects can produce same shadow (non-uniqueness)
+      \end{itemize}
+    \end{block}
+  \end{minipage}
 \end{frame}
 
 \begin{frame}
@@ -299,6 +320,43 @@ This suggests that for \emph{any} inverse problem involving a smoothing forward 
 \section{Case Study 3: Deconvolution}
 
 \begin{frame}
+\frametitle{Deconvolution: Visual Illustration}
+\begin{center}
+\begin{tikzpicture}[scale=0.9, every node/.style={transform shape}]
+    % Original (sharp) image
+    \node[anchor=south west, inner sep=0] (sharp) at (0,0) {
+        \includegraphics[width=0.28\textwidth]{introduction/camera_man.png}
+    };
+    \node[below=0.2cm of sharp, font=\small] {Sharp Image $u$};
+    
+    % Forward arrow with convolution operator
+    \draw[-{Stealth[length=3mm, width=2mm]}, line width=1.5pt] 
+        ($(sharp.east) + (0.6cm, 2.2cm)$) -- 
+        node[above, midway, font=\footnotesize] {Forward: Convolution} 
+        ($(sharp.east) + (3.6cm, 2.2cm)$);
+    
+    % Blurry image
+    \node[anchor=south west, inner sep=0] (blurry) at (8.2,0) {
+        \includegraphics[width=0.28\textwidth]{introduction/camera_man_blurry.png}
+    };
+    \node[below=0.2cm of blurry, font=\small] {Blurred Image $f$};
+    
+    % Inverse arrow (deconvolution) - in red to emphasize the challenge
+    \draw[-{Stealth[length=3mm, width=2mm]}, line width=1.5pt, red] 
+        ($(blurry.west) + (-0.6cm, -2.2cm)$) -- 
+        node[below, midway, font=\footnotesize, text=red] {\textbf{Inverse: Deconvolution}} 
+        ($(sharp.east) + (0.6cm, -2.2cm)$);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.1cm}
+\begin{itemize}
+    \item \textbf{Forward:} Convolution with blur kernel $g$ produces blurred image
+    \item \textbf{Inverse:} Recover sharp image from blurred observation (ill-posed!)
+\end{itemize}
+\end{frame}
+
+\begin{frame}
 \frametitle{Convolution and Deblurring}
 Many imaging systems (cameras, microscopes) are modelled by a convolution:
 $$ (Ku)(x) = \int_{\mathbb{R}^d} g(x - y) u(y) dy = (g * u)(x) = f(x) $$
@@ -316,7 +374,7 @@ The direct inversion suggests dividing by the kernel in the Fourier domain:
 $$ \hat{u}(\xi) = \frac{\hat{f}(\xi)}{\hat{g}(\xi)} $$
 
 \textbf{The Problem:}
-Real-world blur kernels $g$ are smooth (e.g., Gaussian).
+Real-world blur kernels $g$ are smooth (e.g., Gau\ss ian).
 \begin{itemize}
     \item The Fourier coefficients $\hat{g}(\xi)$ decay rapidly to zero as $|\xi| \to \infty$.
     \item $\hat{g}(\xi) \approx 0$ for high frequencies.
@@ -391,7 +449,7 @@ Is training a Neural Network well-posed?
 
 We treat this via \textbf{optimisation} rather than direct inversion:
 $$ \theta^* = \argmin_\theta \| K(\theta) - Y \|^2 + \lambda R(\theta) $$
-where $R(\theta)$ is a regularisation function (e.g., weight decay). More about this at a later stage!
+where $R(\theta)$ is a regularisation function (e.g., weight decay). More about this next week!
 \end{frame}
 
 \section{Summary}
