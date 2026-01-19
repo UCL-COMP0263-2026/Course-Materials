@@ -1,0 +1,488 @@
+\chapter{Regularisation}
+
+In the previous chapter, we established that most interesting inverse problems are ill-posed. While the Moore-Penrose inverse $K^\dagger$ provides a unique minimal norm least-squares solution, it is typically still unstable (unbounded) when applied to compact operators or severely ill-conditioned matrices. As demonstrated in Section \ref{sec:svd}, the decay of the singular values $\sigma_j \to 0$ causes the terms $1/\sigma_j$ in the SVD expansion of $K^\dagger f$ (Equation \eqref{eq:moore_penrose_svd}) to amplify noise drastically.
+
+In practice, we only have access to noisy data $f^\delta$, satisfying $\|f - f^\delta\|_{\mathcal{V}} \leq \delta$. Applying the unstable Moore-Penrose inverse directly to $f^\delta$ is therefore not feasible. To obtain stable and meaningful approximations of the true solution, we must employ \emph{regularisation techniques}.
+
+The core idea of regularisation is to replace the ill-posed problem $K u = f$ with a family of approximate, well-posed problems that depend on a regularisation parameter $\alpha$.
+
+\section{Defining a regularisation method}
+
+We begin by formalising what constitutes a stable approximation of the inverse. We follow \cite{benning2018modern}, but initially restrict the definitions to the case of single-valued operators for simplicity.
+
+\begin{defi}[Regularisation operator]\label{def:reg_operator}\normalfont
+Let $\mathcal{U}$ and $\mathcal{V}$ be normed spaces. A family of (single-valued) operators $R_\alpha \colon \mathcal{V} \to \mathcal{U}$, parametrised by $\alpha \in A$ (where $A$ is a set of admissible parameters, typically $A \subset \mathbb{R}^m_{>0}$), is called a \emph{regularisation operator} if, for each fixed $\alpha \in A$, the operator $R_\alpha$ is continuous on $\mathcal{V}$. That is, if $f^{\delta_n} \to f^\delta$ in $\mathcal{V}$, then $R_\alpha(f^{\delta_n}) \to R_\alpha(f^\delta)$ in $\mathcal{U}$.
+\end{defi}
+
+This definition ensures stability (Third condition of Definition \ref{def:well-posed}). For a fixed $\alpha$, the problem of computing $R_\alpha(f)$ is well-posed with respect to stability.
+
+A regularisation operator $R_\alpha$ together with a \emph{parameter choice strategy} $\alpha_{\text{choice}}: (0, \delta_0) \times \mathcal{V} \to A$, denoted by $\alpha(\delta, f^\delta)$, forms a \emph{regularisation method}.
+
+\subsection{Spectral regularisation}
+
+We now turn to a class of regularisation methods specifically designed for linear operators between Hilbert spaces, utilising the Singular Value Decomposition (SVD) introduced in Section \ref{sec:svd}. These methods are known as \emph{spectral regularisation methods}.
+
+Let $K$ be a compact linear operator with singular system $\{ (\sigma_j, u_j, v_j) \}$. Recall the Moore-Penrose inverse
+\begin{align*}
+    K^\dagger f = \sum_{j=1}^\infty \frac{1}{\sigma_j} \langle f, v_j \rangle_{\mathcal{V}} u_j \, .
+\end{align*}
+The instability arises because the terms $1/\sigma_j$ become arbitrarily large as $\sigma_j \to 0$.
+
+The idea of spectral regularisation is to modify this expression by replacing $1/\sigma_j$ with a filtered value $g_\alpha(\sigma_j)$ that approximates $1/\sigma_j$ when $\sigma_j$ is large, but remains bounded when $\sigma_j$ is small.
+
+\begin{defi}[Spectral regularisation operator, cf. \cite{ehn}]\label{def:spectral_reg_operator}\normalfont
+A \emph{spectral regularisation operator} $R_\alpha \colon \mathcal{V} \to \mathcal{U}$ is defined by
+\begin{align}
+    R_\alpha f = \sum_{j=1}^\infty g_\alpha(\sigma_j) \langle f, v_j \rangle_{\mathcal{V}} u_j \, , \label{eq:spectral_reg}
+\end{align}
+where $g_\alpha \colon \mathbb{R}_{>0} \to \mathbb{R}_{\geq 0}$ are called \emph{filter functions}.
+\end{defi}
+When such a regularisation operator $R_\alpha$ is combined with a parameter choice strategy $\alpha(\delta, f^\delta)$, it forms a \emph{spectral regularisation method}.
+
+For $R_\alpha$ to be a regularisation operator in the sense of Definition \ref{def:reg_operator}, it must be continuous. Since $R_\alpha$ is linear, continuity is equivalent to boundedness.
+
+\begin{prop}\label{prop:spectral_reg_bounded}
+A spectral operator $R_\alpha$ is bounded (and thus continuous) if and only if the filter functions $g_\alpha(\sigma)$ are uniformly bounded for a fixed $\alpha$, i.e., there exists $C_\alpha < \infty$ such that
+\begin{align*}
+    \sup_{\sigma > 0} |g_\alpha(\sigma)| \leq C_\alpha \, .
+\end{align*}
+In this case, $\|R_\alpha\| \leq C_\alpha$.
+\end{prop}
+\begin{proof}
+Using \href{https://en.wikipedia.org/wiki/Parseval%27s_identity}{Parseval's identity}\footnote{Parseval's identity is essentially a generalisation of the Pythagorean theorem to infinite-dimensional Hilbert spaces. While it is usually associated with Fourier series (relating the integral of the square of a function to the sum of the squares of its Fourier coefficients), it applies generally to any orthonormal basis in a Hilbert space.}, we have
+\begin{align*}
+    \|R_\alpha f\|_{\mathcal{U}}^2 &= \sum_{j=1}^\infty |g_\alpha(\sigma_j)|^2 |\langle f, v_j \rangle_{\mathcal{V}}|^2 \\
+    &\leq \left(\sup_j |g_\alpha(\sigma_j)|\right)^2 \sum_{j=1}^\infty |\langle f, v_j \rangle_{\mathcal{V}}|^2 \leq C_\alpha^2 \|f\|_{\mathcal{V}}^2 \, .
+\end{align*}
+\end{proof}
+\noindent We now examine several classical examples.
+
+\subsection{Truncated SVD (TSVD)}
+
+The most straightforward way to stabilise the inversion is to simply discard the components corresponding to small singular values. This is known as the Truncated Singular Value Decomposition (TSVD). The filter function for TSVD is defined as
+\begin{align*}
+    g_\alpha(\sigma) = \begin{cases} 1/\sigma & \text{if } \sigma \geq \alpha \, , \\ 0 & \text{if } \sigma < \alpha \, . \end{cases}
+\end{align*}
+Here, the regularisation parameter $\alpha$ acts as a threshold. The regularised solution is
+\begin{align*}
+    R_\alpha^{\text{TSVD}}f = \sum_{\sigma_j \geq \alpha} \frac{1}{\sigma_j} \langle f, v_j \rangle_{\mathcal{V}} u_j \, .
+\end{align*}
+
+The filter function is bounded by $C_\alpha = 1/\alpha$, which means that according to Proposition \ref{prop:spectral_reg_bounded} the regularisation operator is bounded and therefore continuous. While simple, TSVD often introduces \href{https://en.wikipedia.org/wiki/Ringing_artifacts}{ringing artefacts} (\href{https://en.wikipedia.org/wiki/Gibbs_phenomenon}{Gibbs phenomenon}) due to the sharp cut-off in the spectral domain.
+
+\subsection{Tikhonov regularisation}
+
+Tikhonov regularisation\footnote{Named after the Russian mathematician Andrey Nikolayevich Tikhonov (1906-1993).} \cite{tikhonov1943stability,tikhonov1963solution,tikhonov1966stability}, arguably the most famous regularisation method, provides a smoother way to damp the influence of small singular values. It is also known as \href{https://en.wikipedia.org/wiki/Ridge_regression}{ridge regression} in statistics. The filter function for Tikhonov regularisation is
+\begin{align*}
+    g_\alpha(\sigma) = \frac{\sigma}{\sigma^2 + \alpha} \, ,
+\end{align*}
+and the corresponding regularised solution is
+\begin{align*}
+    R_\alpha^{\text{Tikh}}f = \sum_{j=1}^\infty \frac{\sigma_j}{\sigma_j^2 + \alpha} \langle f, v_j \rangle_{\mathcal{V}} u_j \, .
+\end{align*}
+
+The filter function is bounded. By finding the maximum of $g_\alpha(\sigma)$ (which occurs at $\sigma=\sqrt{\alpha}$), we easily verify $C_\alpha = 1/(2\sqrt{\alpha})$, which means that it is indeed a regularisation in the sense of Definition \ref{def:reg_operator}.
+
+In contrast to TSVD, one amazing property of Tikhonov regularisation is that it can also be expressed in a closed form without explicitly using the SVD.
+
+\begin{thm}[Tikhonov operator form]\label{thm:tikhonov_form}
+The Tikhonov regularisation operator $R_\alpha^{\text{Tikh}}$ is equivalent to
+\begin{align}
+    R_\alpha^{\text{Tikh}} = (K^* K + \alpha I)^{-1} K^* \, .\label{eq:tikh_op}
+\end{align}
+\end{thm}
+\begin{proof}
+We verify this using the SVD property $K^* K u_j = \sigma_j^2 u_j$. Thus, $(K^* K + \alpha I) u_j = (\sigma_j^2 + \alpha) u_j$. The operator $(K^* K + \alpha I)$ is invertible for $\alpha>0$, and $(K^* K + \alpha I)^{-1} u_j = (\sigma_j^2 + \alpha)^{-1} u_j$. We also know $K^* f = \sum_j \langle K^* f, u_j \rangle_{\mathcal{U}} u_j = \sum_j \langle f, K u_j \rangle_{\mathcal{V}} u_j = \sum_j \sigma_j \langle f, v_j \rangle_{\mathcal{V}} u_j$. Applying the inverse operator to $K^* f$ yields
+\begin{align*}
+    (K^* K + \alpha I)^{-1}K^* f &= \sum_{j=1}^\infty \sigma_j \langle f, v_j \rangle_{\mathcal{V}} (K^* K + \alpha I)^{-1} u_j \\
+    &= \sum_{j=1}^\infty \frac{\sigma_j}{\sigma_j^2 + \alpha} \langle f, v_j \rangle_{\mathcal{V}} u_j = R_\alpha^{\text{Tikh}}f \, .
+\end{align*}
+\end{proof}
+There is a nice intuition behind \eqref{eq:tikh_op}, as we see that for $\alpha \rightarrow 0$ the operator $R_\alpha^{\text{Tikh}}$ converges to the normal equation, i.e. $\lim_{ \alpha \rightarrow 0} R_\alpha^{\text{Tikh}} f = (K^* K)^{-1} K^* f$. This is not just a coincidence, as we will explain at a later stage. 
+
+\subsection{Landweber regularisation}
+
+The \href{https://en.wikipedia.org/wiki/Landweber_iteration}{Landweber iteration} \cite{landweber1951iteration} is an iterative method based on gradient descent applied to the least-squares functional $\frac{1}{2}\|K u - f\|_{\mathcal{V}}^2$. The iteration is defined by
+\begin{align*}
+    u_{k+1} = u_k + \tau K^*(f - K u_k) \, ,
+\end{align*}
+with initial guess $u_0 = 0$, and a step size $\tau$ satisfying $0 < \tau < 2/\|K\|^2$.
+
+In this context, the iteration number $k$ serves as the regularisation parameter (playing the role of $1/\alpha$). This approach is known as \emph{iterative regularisation} or regularisation by early stopping. The resulting operator $R_k$ mapping $f$ to $u_k$ corresponds to the spectral filter
+\begin{align*}
+    g_k(\sigma) = \frac{1}{\sigma} (1 - (1-\tau\sigma^2)^k) \, .
+\end{align*}
+For a fixed $k$, the filter function is bounded. As $k \to \infty$, $g_k(\sigma) \to 1/\sigma$ (since the condition on $\tau$ ensures $|1-\tau\sigma^2| < 1$).
+
+\subsection{The need for convergence}
+
+While stability, as ensured by Definition \ref{def:reg_operator}, is a crucial first step, it is not sufficient on its own. A regularisation method must also be accurate; that is, the regularised solution it produces should be a meaningful approximation of the \emph{true} solution to the original inverse problem.
+
+To see why stability alone is inadequate, consider the trivial operator $R_\alpha(f^\delta) = 0$ for all $\alpha$ and all data $f^\delta$. This operator is perfectly continuous (and thus stable), but it provides absolutely no information about the solution of $K u = f$, unless the true solution happens to be zero. A useful regularisation method must be consistent: as the noise level in the data diminishes, the regularised solutions should converge to a genuine solution of the original, noise-free problem.
+
+\subsubsection{Defining the target solution}
+Before we can formalise the notion of convergence, we must first precisely define the "true solution" that we want our method to approximate. This is particularly important when the original problem does not have a unique solution (i.e., the null space $\mathcal{N}(K)$ is non-trivial), or indeed when no solution exists at all. We first define what constitutes a "best" solution in a general sense.
+
+\begin{defi}[Best approximate solution]\normalfont
+Given an error measure $F \colon \mathcal{V} \times \mathcal{V} \to \mathbb{R} \cup \{+\infty\}$, we call $\hat{u} \in \mathcal{U}$ a \emph{best approximate solution} of $K u=f$ with respect to $F$ if it minimises the discrepancy between the model output and the data, i.e.
+\begin{align*}
+    F(K \hat{u}, f) \le F(K u, f) \quad \text{for all } u \in \mathcal{U} \, .
+\end{align*}
+\end{defi}
+
+The set of best approximate solutions can still contain multiple elements. To single out a unique solution, we introduce a selection criterion, formalised by a selection operator.
+
+\begin{defi}[Selection operator]\label{def:selection_operator}\normalfont
+A (potentially set-valued) operator $\mathcal{S} \colon \mathcal{R}(K) \rightrightarrows \mathcal{U}$ is called a \emph{selection operator} if $\mathcal{S}(K u) \subset \{ u \} + \mathcal{N}(K)$ for all $u \in \mathcal{U}$. An element $u^\dagger \in \mathcal{S}(f)$ is called a \emph{prior selected solution}.
+\end{defi}
+
+Often, the selection operator is defined by choosing the element from the set of best approximate solutions that minimises a certain property, such as its norm. The canonical approach for linear inverse problems in Hilbert spaces is the minimum-norm least-squares solution.
+
+\begin{exm}[Minimum-norm least-squares selection]\normalfont
+Let us consider the standard quadratic error measure $F(K u, f) = \frac{1}{2} \|K u - f\|_{\mathcal{V}}^2$. The best approximate solutions are then the well-known \emph{least-squares solutions}, which are characterised as the solutions to the \emph{normal equation} $K^* K u = K^* f$, as already shown in Section \ref{sec:geninv}.
+
+From this set of least-squares solutions, we can define a selection operator that chooses the unique solution with the smallest norm. This selection operator $\mathcal{S} \colon \mathcal{D}(K^\dagger) \to \mathcal{U}$ is defined as
+\begin{align*}
+    \mathcal{S}(f) = \argmin_{u \in \mathcal{U}} \left\{ \|u\|_{\mathcal{U}} \mid K^* K u = K^* f \right\} \, .
+\end{align*}
+This operator is precisely the Moore-Penrose inverse as we have pointed out in Section \ref{sec:geninv}, so the set of prior selected solutions for a given $f$ is the singleton $\mathcal{S}(f) = \{ K^\dagger f \}$.
+\end{exm}
+
+For the remainder of our discussion on spectral regularisations, the Moore-Penrose solution $u^\dagger = K^\dagger f$ will be our target, the "true solution" we wish to recover.
+
+\subsubsection{Convergence of a regularisation method}
+We now face a fundamental trade-off. Stability requires a fixed regularisation parameter $\alpha > 0$, as the operators $R_\alpha$ are continuous for $\alpha > 0$. However, accuracy demands that we approximate the (typically discontinuous) Moore-Penrose inverse $K^\dagger$, which formally corresponds to the case $\alpha = 0$.
+
+The resolution to this dilemma lies in making the regularisation parameter dependent on the noise level $\delta$. As the noise vanishes ($\delta \to 0$), we can choose $\alpha$ to also approach zero, thereby improving accuracy while maintaining stability at each step. This leads to the formal definition of a convergent regularisation method.
+
+\begin{defi}[Convergent regularisation method]\label{def:reg_method}\normalfont
+A \emph{regularisation method} consists of a regularisation operator $R_\alpha$ and a parameter choice strategy $\alpha(\delta, f^\delta) \colon (0, \delta_0) \times \mathcal{V} \to A$.
+
+The method is called \emph{convergent} if for any exact data $f$, for which $\mathcal{S}(f)$ is well-defined, for any sequence of noise levels $\delta_n \to 0$, and any sequence of noisy data $f^{\delta_n}$ satisfying $F(f, f^{\delta_n}) \leq \delta_n$, the regularised solutions converge to the true solution. If we set $\alpha_n = \alpha(\delta_n, f^{\delta_n})$, this means
+\begin{align*}
+    \lim_{n \to \infty} R_{\alpha_n}(f^{\delta_n}) = K^\dagger f \, .
+\end{align*}
+In simpler terms, convergence requires that
+\begin{align*}
+    \lim_{\delta \to 0} \sup \{ \|R_{\alpha(\delta, f^\delta)}(f^\delta) - K^\dagger f\|_{\mathcal{U}} \mid f^\delta \in \mathcal{V}, \|f - f^\delta\|_{\mathcal{V}} \leq \delta \} = 0 \, .
+\end{align*}
+\end{defi}
+This definition guarantees that for any possible realisation of noise up to a level $\delta$, the regularised solution will become arbitrarily close to the true solution, provided $\delta$ is small enough. A successful parameter choice strategy must therefore carefully balance the errors arising from noise and from the approximation of $K^\dagger$.
+
+\begin{rem}
+    Note that in Definition \ref{def:reg_method} we assume $F(f, f^{\delta_n}) \leq \delta_n$, which for $F(f, f^{\delta_n}) = \frac{1}{2} \|f - f^{\delta_n}\|_{\mathcal{V}}^2$ would mean $\|f - f^{\delta_n}\|_{\mathcal{V}} \leq \sqrt{2 \delta_n}$. However, in order to stay consistent with traditional inverse problems literature, we will consistently use the estimate $\|f - f^{\delta_n}\|_{\mathcal{V}} \leq \delta_n$ for this choice of $F$ instead.
+\end{rem}
+
+\subsubsection{Example: Convergence of Tikhonov regularisation}
+Let us verify that Tikhonov regularisation, when paired with a suitable parameter choice rule, forms a convergent regularisation method. Our goal is to show that we can choose $\alpha(\delta)$ such that $\|R_{\alpha(\delta)}^{\text{Tikh}}f^\delta - K^\dagger f\|_{\mathcal{U}} \to 0$ as $\delta \to 0$.
+
+First, we check the \emph{approximation property}: for noise-free data $f \in \mathcal{D}(K^\dagger)$, does $R_\alpha^{\text{Tikh}}f$ converge to $K^\dagger f$ as $\alpha \to 0$? We have already seen from the operator form of the Tikhonov regularisation operator that we converge to the least-squares solution for $\alpha \rightarrow 0$. However, we can also see this directly from the filter function. The Tikhonov filter function $g_\alpha(\sigma) = \frac{\sigma}{\sigma^2 + \alpha}$ converges pointwise to $1/\sigma$ for any $\sigma > 0$:
+\begin{align*}
+    \lim_{\alpha \to 0} g_\alpha(\sigma) = \lim_{\alpha \to 0} \frac{\sigma}{\sigma^2 + \alpha} = \frac{1}{\sigma} \, .
+\end{align*}
+This pointwise convergence ensures that for any $f \in \mathcal{D}(K^\dagger)$, we have $\lim_{\alpha \to 0} R_\alpha^{\text{Tikh}}f = K^\dagger f$.
+
+\noindent Next, we analyse the total error using the triangle inequality:
+\begin{align*}
+    \|R_{\alpha(\delta)}^{\text{Tikh}}f^\delta - K^\dagger f\|_{\mathcal{U}} \leq \underbrace{\|R_{\alpha(\delta)}^{\text{Tikh}}(f^\delta - f)\|_{\mathcal{U}}}_{\text{Noise propagation error}} + \underbrace{\|R_{\alpha(\delta)}^{\text{Tikh}}f - K^\dagger f\|_{\mathcal{U}}}_{\text{Approximation error}} \, .
+\end{align*}
+
+\begin{enumerate}
+    \item \emph{Noise propagation error}: This term measures how the noise in the data is amplified by the regularisation operator. We can bound it by the operator norm of $R_\alpha^{\text{Tikh}}$:
+    \begin{align*}
+        \|R_{\alpha(\delta)}^{\text{Tikh}}(f^\delta - f)\|_{\mathcal{U}} \leq \|R_{\alpha(\delta)}^{\text{Tikh}}\| \|f^\delta - f\|_{\mathcal{V}} \leq \frac{1}{2\sqrt{\alpha(\delta)}} \delta \, .
+    \end{align*}
+
+    \item \emph{Approximation error}: This term measures how well the regularised operator approximates the Moore-Penrose inverse on the noise-free data. As established by the approximation property, this term vanishes as $\alpha(\delta) \to 0$.
+\end{enumerate}
+
+For the total error to converge to zero as $\delta \to 0$, our parameter choice rule $\alpha(\delta)$ must ensure that both error terms vanish. This leads to two conditions:
+\begin{itemize}
+    \item To make the approximation error vanish, we need $\lim_{\delta \to 0} \alpha(\delta) = 0$.
+    \item To make the noise propagation error vanish, we need $\lim_{\delta \to 0} \frac{\delta}{\sqrt{\alpha(\delta)}} = 0$.
+\end{itemize}
+A choice such as $\alpha(\delta) = c \delta^p$ for some constant $c > 0$ and $0 < p < 2$ would satisfy these conditions. For instance, if we choose $\alpha(\delta) = c\delta$, then $\delta / \sqrt{c\delta} = \sqrt{\delta/c} \to 0$ as $\delta \to 0$.
+
+Therefore, Tikhonov regularisation, combined with a parameter choice rule $\alpha(\delta)$ that converges to zero slower than $\delta^2$ but faster than a constant, constitutes a \emph{convergent regularisation method}.
+
+\section{Variational regularisation}\label{sec:varreg}
+
+Spectral regularisation methods provide an elegant framework for stabilising linear inverse problems. However, their reliance on the SVD can be restrictive. A more general and powerful approach is \emph{variational regularisation}, where solutions are found by minimising an energy functional.
+
+This concept is naturally motivated by Tikhonov regularisation. In Theorem \ref{thm:tikhonov_form}, we introduced the Tikhonov solution as $u_\alpha^\delta = (K^* K + \alpha I)^{-1} K^* f^\delta$. It turns out that this solution is also the unique minimiser of a simple quadratic functional.
+
+\begin{prop}[Variational Form of Tikhonov Regularisation]\label{prop:var_tikh}
+The Tikhonov regularised solution $u_\alpha^\delta$ is the unique solution to the optimisation problem
+\begin{equation}
+\min_{u \in \mathcal{U}} \left\{ \frac{1}{2} \|K u - f^\delta\|_{\mathcal{V}}^2 + \frac{\alpha}{2} \|u\|_{\mathcal{U}}^2 \right\} \, . \label{eq:tikh_variational}
+\end{equation}
+\end{prop}
+\begin{proof}
+See Section \ref{sec:tikh_proof}.
+\end{proof}
+
+This equivalence is profound. It demonstrates that we can formulate regularisation not just as a filtering process in the spectral domain, but as an optimisation problem that balances competing goals: fitting the data and satisfying a prior belief about the solution (in this case, having a small norm). This opens the door to a vastly more flexible framework. We can generalise the problem to
+\begin{align}
+R_\alpha(f^\delta) := \argmin_{u \in \mathcal{U}} \{ F(K u, f^\delta) + \alpha J(u) \} \, ,\label{eq:var_reg}
+\end{align}
+where we have a
+\begin{itemize}
+    \item \emph{data fidelity term}, $F(K u, f^\delta)$, that measures the discrepancy between the model prediction $K u$ and the observed data $f^\delta$,
+    \item \emph{regularisation term} (or penalty term), $J(u)$, that encodes prior knowledge. It penalises solutions considered undesirable. The regularisation parameter $\alpha \in A$ manages the trade-off.
+\end{itemize}
+The true power of this approach lies in its ability to employ sophisticated regularisation functions beyond the squared norm, such as the Total Variation (TV) for edge-preserving image reconstruction or $\ell^1$-norms for promoting sparsity. To analyse these more general methods, we need some fundamental tools from convex analysis.
+
+\subsection{Convex Analysis Prerequisites}
+
+Convexity is a cornerstone of optimisation and regularisation theory. It guarantees that local minima are global and provides a rich set of tools for analysing solutions.
+
+\subsubsection{Convex Sets and Functions}
+
+\begin{defi}[Convex Set]\normalfont
+A set $\mathcal{C} \subset \mathcal{U}$ is \textbf{convex} if for any two points $u_1, u_2 \in \mathcal{C}$, the line segment connecting them is also contained in $\mathcal{C}$. That is, for all $\lambda \in [0, 1]$,
+$$\lambda u_1 + (1 - \lambda)u_2 \in \mathcal{C} \, .$$
+\end{defi}
+
+\begin{defi}[Convex Function]\normalfont
+A functional $F \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ is \textbf{convex} if its domain $\mathcal{D}(F) = \{ u \in \mathcal{U} \mid F(u) < \infty \}$ is a convex set and for any $u_1, u_2 \in \mathcal{D}(F)$ and $\lambda \in [0, 1]$, the following inequality holds:
+$$F(\lambda u_1 + (1 - \lambda)u_2) \leq \lambda F(u_1) + (1 - \lambda)F(u_2) \, .$$
+The functional is called \textbf{strictly convex} if this inequality is strict for $u_1 \neq u_2$ and $\lambda \in (0, 1)$.
+\end{defi}
+
+In variational analysis, we often require functionals to be \textbf{proper}, meaning they are not everywhere infinite, and \textbf{lower semi-continuous (l.s.c.)}, which ensures that the sets $\{ u \mid F(u) \leq c \}$ are closed. These properties are crucial for guaranteeing the existence of minimisers.
+
+\subsubsection{Subgradients and Subdifferentials}
+For non-differentiable convex functions, the concept of a gradient is replaced by the subgradient, which defines a supporting hyperplane to the function's graph.
+
+\begin{defi}[Subgradient and Subdifferential]\label{defi:subdiff}\normalfont
+Let $F \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a convex functional. An element $p \in \mathcal{U}^*$ (the continuous dual space of $\mathcal{U}$) is a \textbf{subgradient} of $F$ at a point $u_0 \in \mathcal{D}(F)$ if
+$$F(u) \geq F(u_0) + \langle p, u - u_0 \rangle \quad \text{for all } u \in \mathcal{U} \, .$$
+The set of all subgradients of $F$ at $u_0$ is called the \textbf{subdifferential} and is denoted by $\partial F(u_0)$.
+\end{defi}
+
+The subgradient inequality states that the affine function defined by the subgradient at $u_0$ is a global underestimator of the functional $F$. If $F$ is differentiable at $u_0$, the subdifferential contains only the gradient, $\partial F(u_0) = \{ \nabla F(u_0) \}$.
+
+\begin{defi}[Global Minimiser]\normalfont
+A point $u^* \in \mathcal{U}$ is called a \emph{global minimiser} of a functional $F: \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ if $F(u^*) \leq F(u)$ for all $u \in \mathcal{U}$.
+\end{defi}
+
+\begin{thm}[Fermat's Rule]\label{thm:fermat}
+Let $F: \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper convex functional. A point $u^* \in \mathcal{D}(F)$ is a global minimiser of $F$ if and only if
+\begin{align*}
+    0 \in \partial F(u^*) \, .
+\end{align*}
+\end{thm}
+\begin{proof}
+This follows directly from the subgradient inequality (Definition \ref{defi:subdiff}). If $0 \in \partial F(u^*)$, then $F(u) \geq F(u^*) + \langle 0, u - u^* \rangle = F(u^*)$ for all $u$, so $u^*$ is a global minimiser. Conversely, if $F(u) \geq F(u^*)$ for all $u$, then the subgradient inequality holds for $p=0$.
+\end{proof}
+
+\begin{exm}\normalfont
+Consider the problem of finding a best approximate solution, which corresponds to minimising the discrepancy functional $F(u) = \frac{1}{2}\|Ku - f\|^2$. Fermat's rule states that $u^*$ is a minimiser if and only if $0 \in \partial F(u^*)$. As we will see below, for differentiable functions this is equivalent to the gradient being zero.
+\end{exm}
+
+\begin{cor}[Optimality for Differentiable Functions]\label{cor:diff_opt}
+If $F$ is convex and Fréchet differentiable at $u^*$, then the subdifferential contains only the gradient, i.e., $\partial F(u^*) = \{ \nabla F(u^*) \}$. In this case, Fermat's rule reduces to the classical condition
+\begin{align*}
+    \nabla F(u^*) = 0 \, .
+\end{align*}
+\end{cor}
+
+\subsubsection{Bregman Distance}
+The Bregman distance is a concept derived from a convex functional that measures a form of "distance" between two points in the sense that it measures the distance between a functional in one argument and its linearisation in another. It is not a metric in the traditional sense, as it is generally not symmetric.
+
+\begin{defi}[Bregman Distance \cite{bregman,kiwiel1997proximal}]\normalfont
+Let $F \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a convex functional. For any two points $u_1, u_2 \in \mathcal{D}(F)$ and a subgradient $p_2 \in \partial F(u_2)$, the \emph{Bregman distance} between $u_1$ and $u_2$ is defined as
+$$D_F^{p_2}(u_1, u_2) := F(u_1) - F(u_2) - \langle p_2, u_1 - u_2 \rangle \, .$$
+\end{defi}
+
+From the definition of a subgradient, it is clear that the Bregman distance is always non-negative, $D_F^{p_2}(u_1, u_2) \geq 0$. It quantifies the gap between the value of the function $F(u_1)$ and its linear approximation from $u_2$.
+
+\begin{exm}[Squared Norm]\normalfont
+If $\mathcal{U}$ is a Hilbert space and $F(u) = \frac{1}{2} \|u\|_{\mathcal{U}}^2$, the subgradient at $u_2$ is simply $u_2$. The Bregman distance becomes
+$$D_F^{u_2}(u_1, u_2) = \frac{1}{2} \|u_1\|_{\mathcal{U}}^2 - \frac{1}{2} \|u_2\|_{\mathcal{U}}^2 - \langle u_2, u_1 - u_2 \rangle_{\mathcal{U}} = \frac{1}{2} \|u_1 - u_2\|_{\mathcal{U}}^2 \, .$$
+In this case, the Bregman distance is symmetric and corresponds to half the squared norm distance.
+\end{exm}
+
+To restore symmetry for the general case, which is convenient for error analysis, we introduce the symmetrised Bregman distance.
+
+\begin{defi}[Symmetric Bregman Distance]\normalfont
+Let $F \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a convex functional. For any two points $u_1, u_2 \in \mathcal{D}(F)$, and for any choice of subgradients $p_1 \in \partial F(u_1)$ and $p_2 \in \partial F(u_2)$, the \textbf{symmetric Bregman distance} is
+\begin{align*}
+D_F^{\text{symm}}(u_1, u_2) &:= D_F^{p_2}(u_1, u_2) + D_F^{p_1}(u_2, u_1) \\
+&= \langle p_1 - p_2, u_1 - u_2 \rangle \, .
+\end{align*}
+\end{defi}
+Since the subdifferential of a convex function is a monotone operator, the symmetric Bregman distance is also non-negative.
+
+\subsubsection{Characteristic Functions and Convex Conjugates}
+Two other concepts from convex analysis are essential for formulating constrained optimisation problems in a dual setting.
+
+\begin{defi}[Characteristic Function]\normalfont
+Let $\mathcal{C} \subset \mathcal{U}$ be a non-empty set. The \emph{characteristic function} (or indicator function) of $\mathcal{C}$ is the functional $\chi_{\mathcal{C}} \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ defined as
+\[ \chi_{\mathcal{C}}(u) := \begin{cases} 0 & \text{if } u \in \mathcal{C} \, , \\ +\infty & \text{if } u \notin \mathcal{C} \, . \end{cases} \]
+If $\mathcal{C}$ is a convex set, then $\chi_{\mathcal{C}}$ is a convex functional. This function is instrumental in turning constrained optimisation problems into unconstrained ones. For example, $\min_{u \in \mathcal{C}} F(u)$ is equivalent to $\min_{u \in \mathcal{U}} \{ F(u) + \chi_{\mathcal{C}}(u) \}$.
+\end{defi}
+
+The concept of duality is captured by the convex conjugate, also known as the Fenchel-Legendre transform.
+
+\begin{defi}[Convex Conjugate]\normalfont
+Let $F \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper functional. Its \emph{convex conjugate} is the functional $F^* \colon \mathcal{U}^* \to \mathbb{R} \cup \{+\infty\}$ defined by
+\[ F^*(p) := \sup_{u \in \mathcal{U}} \{ \langle p, u \rangle - F(u) \} \, . \]
+\end{defi}
+The convex conjugate $F^*$ is always convex and lower semi-continuous. A fundamental result linking a functional and its conjugate is the \emph{Fenchel-Young inequality}:
+\[ F(u) + F^*(p) \ge \langle p, u \rangle \, . \]
+Equality holds if and only if $p \in \partial F(u)$.
+
+\subsubsection{The Proximal Operator}
+A fundamental tool in non-smooth optimisation is the \emph{proximal operator} (or Moreau envelope). It allows us to handle non-differentiable regularisation terms by solving a local minimisation problem.
+
+\begin{defi}[Proximal Operator]\normalfont
+Let $J \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper, lower semi-continuous, convex functional, and let $\tau > 0$ be a parameter. The \emph{proximal operator} of $J$ with parameter $\tau$, denoted by $\operatorname{prox}_{\tau J} \colon \mathcal{U} \to \mathcal{U}$, is defined as
+\begin{align*}
+\operatorname{prox}_{\tau J}(x) := \argmin_{u \in \mathcal{U}} \left\{ \frac{1}{2}\|u - x\|^2 + \tau J(u) \right\} \, .
+\end{align*}
+\end{defi}
+The proximal operator is well-defined and single-valued for convex $J$. It can be interpreted as a regularised projection: it seeks a point $u$ that minimizes $J$ while staying close to the input $x$.
+
+\begin{exm}[Squared Euclidean Norm]\normalfont
+Let $\mathcal{U} = \mathbb{R}^n$ and $J(u) = \frac{\lambda}{2}\|u\|_2^2$. The proximal operator is given by the optimality condition of the minimisation problem:
+\[ u - x + \tau \lambda u = 0 \implies (1 + \tau\lambda)u = x \implies u = \frac{x}{1 + \tau\lambda} \, . \]
+Thus, $\operatorname{prox}_{\tau J}(x) = \frac{1}{1 + \tau\lambda} x$. This is a simple shrinkage (scaling) operation.
+\end{exm}
+
+\begin{exm}[$\ell^1$-Norm and Soft Thresholding]\normalfont
+Let $\mathcal{U} = \mathbb{R}^n$ and $J(u) = \|u\|_1 = \sum_{i=1}^n |u_i|$. Since the $\ell^1$-norm is separable (a sum of functions of individual components), the proximal problem decouples into $n$ one-dimensional problems:
+\[ u_i = \argmin_{z \in \mathbb{R}} \left\{ \frac{1}{2}(z - x_i)^2 + \tau |z| \right\} \, . \]
+The solution is given by the famous \emph{Soft Thresholding} operator, denoted by $\mathcal{S}_\tau$:
+\[ [\operatorname{prox}_{\tau \|\cdot\|_1}(x)]_i = \mathcal{S}_\tau(x_i) := \begin{cases} x_i - \tau & \text{if } x_i > \tau \, , \\ 0 & \text{if } |x_i| \le \tau \, , \\ x_i + \tau & \text{if } x_i < -\tau \, . \end{cases} \]
+Alternatively, this can be written as $\mathcal{S}_\tau(x_i) = \operatorname{sgn}(x_i) \max(|x_i| - \tau, 0)$.
+\end{exm}
+
+\subsubsection{Smoothness and the Descent Lemma}
+For the data fidelity term, we often require differentiability with a Lipschitz continuous gradient. This property is known as $L$-smoothness.
+
+\begin{defi}[$L$-Smoothness]\normalfont
+A continuously differentiable function $F \colon \mathcal{U} \to \mathbb{R}$ is called \emph{$L$-smooth} on $\mathcal{U}$ if its gradient is Lipschitz continuous with constant $L > 0$, i.e.,
+\[ \|\nabla F(x) - \nabla F(y)\| \le L \|x - y\| \quad \text{for all } x, y \in \mathcal{U} \, . \]
+\end{defi}
+
+A crucial consequence of $L$-smoothness is the \emph{Descent Lemma}, which provides a quadratic upper bound on the function:
+\[ F(y) \le F(x) + \langle \nabla F(x), y - x \rangle + \frac{L}{2} \|y - x\|^2 \, . \]
+This inequality is fundamental for analyzing the convergence of gradient-based algorithms. Interestingly, smoothness can be equivalently characterised using the Bregman distance.
+
+\begin{prop}[Bregman Characterisation of Smoothness]
+A convex function $F$ is $L$-smooth if and only if the Bregman distance with respect to the function $h(u) := \frac{L}{2}\|u\|^2 - F(u)$ is non-negative for all arguments. That is,
+\[ D_{\frac{L}{2}\|\cdot\|^2 - F}(x, y) \ge 0 \quad \text{for all } x, y \in \mathcal{U} \, . \]
+This is equivalent to saying that $\frac{L}{2}\|u\|^2 - F(u)$ is a convex function.
+\end{prop}
+
+\subsection{Proof of Tikhonov Variational Form}\label{sec:tikh_proof}
+Equipped with the tools of convex analysis, specifically Fermat's rule for differentiable functions (Corollary \ref{cor:diff_opt}), we can now provide the proof for Proposition \ref{prop:var_tikh}.
+
+\begin{proof}[Proof of Proposition \ref{prop:var_tikh}]
+Let $\Phi(u) := \frac{1}{2} \|K u - f^\delta\|_{\mathcal{V}}^2 + \frac{\alpha}{2} \|u\|_{\mathcal{U}}^2$. Since $\mathcal{U}$ is a Hilbert space and $\alpha > 0$, the functional $\Phi$ is strictly convex and continuous. Its Fréchet derivative is well-defined. By Corollary \ref{cor:diff_opt}, a unique minimiser $u_\alpha^\delta$ exists and is characterised by the condition that the gradient vanishes, i.e., $\nabla \Phi(u_\alpha^\delta) = 0$.
+
+We compute the gradient. For any direction $h \in \mathcal{U}$, the directional derivative is
+\begin{align*}
+    \langle \nabla \Phi(u), h \rangle_{\mathcal{U}} &= \frac{d}{dt} \Phi(u + th) \Big|_{t=0} \\
+    &= \frac{d}{dt} \left[ \frac{1}{2}\|K u + t K h - f^\delta\|_{\mathcal{V}}^2 + \frac{\alpha}{2}\|u + th\|_{\mathcal{U}}^2 \right] \Big|_{t=0} \\
+    &= \left[ \langle K u + t K h - f^\delta, K h \rangle_{\mathcal{V}} + \alpha\langle u + th, h \rangle_{\mathcal{U}} \right] \Big|_{t=0} \\
+    &= \langle K u - f^\delta, K h \rangle_{\mathcal{V}} + \alpha\langle u, h \rangle_{\mathcal{U}} \\
+    &= \langle K^*(K u - f^\delta) + \alpha u, h \rangle_{\mathcal{U}} \, .
+\end{align*}
+Since this must hold for all $h \in \mathcal{U}$, the condition $\nabla \Phi(u) = 0$ implies
+$$ K^*(K u_\alpha^\delta - f^\delta) + \alpha u_\alpha^\delta = 0 \, . $$
+Rearranging this equation gives the Euler-Lagrange equation $(K^* K + \alpha I)u_\alpha^\delta = K^* f^\delta$. Since $K^* K$ is positive semi-definite and $\alpha > 0$, the operator $(K^* K + \alpha I)$ is invertible. Thus, the unique solution is
+$$ u_\alpha^\delta = (K^* K + \alpha I)^{-1} K^* f^\delta \, , $$
+which is precisely the operator form of Tikhonov regularisation from \eqref{eq:tikh_op}.
+\end{proof}
+
+\subsection{Well-Posedness, Stability, and Convergence}
+
+We now return to the variational regularisation problem. For the method to be theoretically sound, the set of minimisers $R_\alpha(f^\delta)$ must be non-empty and stable with respect to perturbations in the data $f^\delta$.
+
+\subsubsection{Existence and Stability of Minimisers}
+
+The existence of minimisers and the stability of the solution set are guaranteed under a standard set of technical assumptions on the spaces, the operator $K$, the data fidelity functional $F$, and the regularisation functional $J$. We will not state these conditions in full here, but refer the interested reader to the comprehensive treatment in \cite[Assumption 5.4]{benning2018modern}. Broadly, these assumptions require appropriate convexity, coercivity, and continuity properties. Under these conditions, we can state the following key results.
+
+\begin{lem}[Well-Posedness of the Variational Problem]
+For every $f^\delta \in \mathcal{V}$ and $\alpha > 0$, the set of minimisers $R_\alpha(f^\delta)$ is non-empty. If the functional $F(K u, f^\delta) + \alpha J(u)$ is strictly convex in $u$, the minimiser is unique.
+\end{lem}
+
+\begin{thm}[Stability of the Regularisation Operator]
+Let $\alpha > 0$ be fixed. If the data fidelity $F$ is continuous with respect to its second argument, and if we have a sequence of data $f^{\delta_n} \to f^\delta$ in $\mathcal{V}$, then any sequence of corresponding solutions $u_n \in R_\alpha(f^{\delta_n})$ possesses a weakly convergent subsequence $u_{n_k} \rightharpoonup u^*$. The limit point $u^*$ of any such subsequence is a minimiser for the limit data, i.e., $u^* \in R_\alpha(f^\delta)$.
+\end{thm}
+This theorem confirms that variational regularisation indeed defines a regularisation operator in the sense of Definition \ref{def:reg_operator}, as it guarantees the required stability property for a fixed parameter $\alpha$.
+
+\subsubsection{The Target Solution and the Source Condition}
+Before analysing the convergence of $u_\alpha^\delta$ to a "true" solution, we must precisely define this target solution. As discussed in Section \ref{sec:geninv}, inverse problems can have multiple (or no) solutions. Regularisation is not just about stabilisation, but also about \emph{selection}.
+
+We define the true solution $u^\dagger$ as a \emph{prior selected solution} (see Definition \ref{def:selection_operator}). For variational methods, a natural choice for the selection operator is one that picks the solution to the noise-free problem $K u=f$ that minimises the regularisation functional $J$.
+
+\begin{defi}[$J$-Minimising Solution]\normalfont
+For a given $f \in \mathcal{R}(K)$, the \emph{$J$-minimising solution} $u^\dagger$ is the solution to the constrained optimisation problem
+\[ u^\dagger \in \argmin_{u \in \mathcal{U}} \{ J(u) \mid K u = f \} \, . \]
+\end{defi}
+
+To analyse this solution, we study its \emph{primal-dual formulation}. The constrained problem is equivalent to the saddle-point problem of finding a pair $(u^\dagger, v^\dagger) \in \mathcal{U} \times \mathcal{V}$ that solves
+\[ \inf_{u \in \mathcal{U}} \sup_{v \in \mathcal{V}} \left\{ J(u) + \langle v, f - K u \rangle_{\mathcal{V}} \right\} \, . \]
+The dual variable $v \in \mathcal{V}$ is a Lagrange multiplier for the constraint $K u = f$. A solution $(u^\dagger, v^\dagger)$ is characterised by the first-order optimality conditions, which state that the subdifferential of the functional with respect to $u$ must contain zero, and the gradient with respect to $v$ must be zero. This leads to a system of two conditions:
+\begin{enumerate}
+    \item $0 \in \partial J(u^\dagger) - \{ K^* v^\dagger \} \implies K^* v^\dagger \in \partial J(u^\dagger)$.
+    \item $K u^\dagger - f = 0 \implies K u^\dagger = f$.
+\end{enumerate}
+This pair of conditions defines our target solution. The first condition is the famous \emph{source condition}.
+
+\begin{defi}[Source Condition]\label{def:source_condition}\normalfont
+A solution $u^\dagger \in \mathcal{U}$ to $K u = f$ is said to satisfy a \emph{source condition} with respect to the regularisation function $J$ if there exists a \emph{source element} $v \in \mathcal{V}$ such that
+\begin{align}
+K^* v \in \partial J(u^\dagger) \, .\tag{SC}\label{eq:sc}
+\end{align}
+\end{defi}
+The source condition imposes a structural alignment between the operator $K$, the regularisation function $J$, and the true solution $u^\dagger$. It is a regularity assumption that is essential for deriving convergence rates.
+
+\subsubsection{Convergence Rates in Bregman Distance}
+We can now analyse the convergence of the regularised solution
+$$u_\alpha^\delta \in \argmin_{u \in \mathcal{U}} \left\{ \frac{1}{2} \|K u - f^\delta\|_{\mathcal{V}}^2 + \alpha J(u) \right\}$$
+to a true solution $u^\dagger$ that satisfies the source condition from Definition \ref{def:source_condition}. The first-order optimality condition for $u_\alpha^\delta$ is that there exists a subgradient $p_\alpha \in \partial J(u_\alpha^\delta)$ such that
+$$K^*(K u_\alpha^\delta - f^\delta) + \alpha p_\alpha = 0 \, .$$
+Combining this with the source condition for $u^\dagger$ allows us to derive a remarkable error estimate.
+
+\begin{thm}[Error Estimate in Symmetric Bregman Distance]\label{thm:bregman_error}
+Let $u^\dagger$ be a $J$-minimising solution satisfying the source condition with source element $v \in \mathcal{V}$. Let $u_\alpha^\delta$ be a solution to the variational problem with noisy data $f^\delta$ satisfying $\|f - f^\delta\|_{\mathcal{V}} \le \delta$. Then the following estimate holds:
+$$D_J^{\text{symm}}(u_\alpha^\delta, u^\dagger) \le \frac{\delta^2}{2\alpha} + \frac{\alpha}{2}\|v\|_{\mathcal{V}}^2 \, .$$
+\end{thm}
+\begin{proof}
+The proof will be provided in the appendix.
+\end{proof}
+
+This theorem provides a powerful tool for analysing convergence. The right-hand side of the inequality consists of two terms: a term that depends on the noise (and decreases as $\alpha$ increases) and a term that depends on the regularisation bias (and decreases as $\alpha$ decreases).
+
+By choosing the regularisation parameter $\alpha$ appropriately in relation to the noise level $\delta$, we can ensure convergence and even determine its rate.
+
+\begin{cor}[Convergence and Rate]
+Under the assumptions of Theorem \ref{thm:bregman_error}, if the parameter choice strategy $\alpha(\delta)$ satisfies
+$$\lim_{\delta \to 0} \alpha(\delta) = 0 \quad \text{and} \quad \lim_{\delta \to 0} \frac{\delta^2}{\alpha(\delta)} = 0 \, ,$$
+then the regularised solutions converge to the true solution in the sense that $\lim_{\delta \to 0} D_J^{\text{symm}}(u_{\alpha(\delta)}^\delta, u^\dagger) = 0$.
+
+Furthermore, by balancing the error terms to minimise the upper bound, we can achieve an optimal rate of convergence. Choosing a parameter choice linear in $\delta$, such as $\alpha(\delta) = \frac{\delta}{\|v\|_{\mathcal{V}}}$, yields
+$$D_J^{\text{symm}}(u_{\alpha(\delta)}^\delta, u^\dagger) \le \|v\|_{\mathcal{V}}\delta \, .$$
+This demonstrates a convergence rate of $\mathcal{O}(\delta)$ with respect to the symmetric Bregman distance.
+\end{cor}
+
+\subsection{Examples of Variational Methods}
+The strength of the variational framework lies in its flexibility to incorporate different regularisation functionals $J$ that model diverse prior knowledge.
+
+\begin{exm}[LASSO]\label{exm:lasso}\normalfont
+In signal processing and statistics, if the solution $u \in \mathbb{R}^n$ is known to be \emph{sparse} (i.e., most of its coefficients are zero), a powerful regularisation functional is the $\ell^1$-norm. The resulting problem is known as the LASSO (Least Absolute Shrinkage and Selection Operator), i.e.
+$$ \min_{u \in \mathbb{R}^n} \left\{ \frac{1}{2}\|K u - f^\delta\|^2_2 + \alpha \|u\|_1 \right\} \, , $$
+where $\|u\|_1 = \sum_{i=1}^n |u_i|$. The $\ell^1$-norm is convex but not differentiable at zero, which is precisely the property that encourages sparse solutions.
+\end{exm}
+
+\begin{exm}[Total Variation Regularisation]\label{exm:rof_inv}\normalfont
+For image processing tasks like denoising or deblurring, a common prior is that images are piecewise constant or piecewise smooth, meaning they have sharp edges but are smooth elsewhere. The squared norm penalty of Tikhonov regularisation tends to blur these edges. The \emph{Total Variation (TV)} regularisation functional is designed to preserve them. For an image $u \in L^2(\Omega)$, it is defined as
+$$ \operatorname{TV}(u) = \sup \left\{ \int_\Omega u(x) \operatorname{div} \varphi(x) \, dx \mid \varphi \in C_c^1(\Omega, \mathbb{R}^2), \|\varphi(x)\|_2 \leq 1 \text{ for all } x \right\} \, . $$
+For smooth functions, this corresponds to $\int_\Omega |\nabla u(x)|_2 dx$. The TV regularisation problem is
+$$ \min_{u} \left\{ \frac{1}{2}\|K u - f^\delta\|_{\mathcal{V}}^2 + \alpha \operatorname{TV}(u) \right\} \, . $$
+This approach has been incredibly successful in computational imaging for preserving important structural features like edges.
+\end{exm}
