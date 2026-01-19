@@ -1,0 +1,734 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric}
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{xcolor}
+
+% Define custom colours (consistent with UCL theme)
+\definecolor{darkpurple}{cmyk}{0.32,0.42,0,0.55}
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{midred}{cmyk}{0,0.79,1,0}
+
+\setbeamercovered{transparent}
+
+% Maths Shorthand
+\newcommand{\norm}[1]{\left\| #1 \right\|}
+\newcommand{\inner}[2]{\left\langle #1, #2 \right\rangle}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Kdag}{K^\dagger}
+\newcommand{\prox}{\operatorname{prox}}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\sgn}{sgn}
+\DeclareMathOperator*{\dom}{dom}
+\newcommand{\charfcn}{\chi}
+\newcommand{\Dom}{\operatorname{Dom}}
+\newcommand{\Range}{\operatorname{Range}}
+\newcommand{\Ncal}{\mathcal{N}}
+\newcommand{\Scal}{\mathcal{S}}
+\newcommand{\set}[1]{\left\{ #1 \right\}}
+
+% Define proposition environment
+\newtheorem{proposition}{Proposition}
+
+% Define theoremblock environment
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Title Information
+%================================================================%
+\title{Regularisation Theory}
+\subtitle{Lecture 3: Convergence Analysis \& Advanced Priors}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[0.5cm] 22 January 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Overview ---
+\begin{frame}
+\frametitle{Lecture Overview}
+\begin{block}{Objectives}
+\begin{itemize}
+    \item Establish the \textbf{Well-Posedness} (Existence/Stability) of the variational problem.
+    \item Define the "True" solution via the \textbf{Source Condition}.
+    \item Introduce \textbf{Bregman Distances} as a generalised error measure.
+    \item Derive rigorous \textbf{Convergence Rates} (specifically $\mathcal{O}(\delta)$).
+    \item Contrast Tikhonov with \textbf{Sparsity (LASSO)} and \textbf{Edge-Preservation (Total Variation)}.
+\end{itemize}
+\end{block}
+
+\tableofcontents
+\end{frame}
+
+%================================================================%
+% Section 1: Well-Posedness of Variational Regularisation
+%================================================================%
+\section{Well-Posedness of Variational Regularisation}
+
+\begin{frame}
+\frametitle{Recap: Variational Regularisation}
+In the previous lecture, we moved from spectral filtering to minimisation. We defined the regularised solution as:
+\begin{equation}
+    u_\alpha^\delta \in \argmin_{u \in \U} \left\{ F(Ku, f^\delta) + \alpha J(u) \right\}
+\end{equation}
+where:
+\begin{itemize}
+    \item $F(Ku, f^\delta)$ is the \textbf{data fidelity} (e.g., $\frac{1}{2}\|Ku-f^\delta\|^2$).
+    \item $J(u)$ is the \textbf{regulariser} (e.g., $\|u\|^2$, $\|u\|_1$, $\text{TV}(u)$).
+    \item $\alpha > 0$ is the regularisation parameter.
+\end{itemize}
+\vspace{1em}
+\textbf{Question:} Does a solution exist? Is it stable?
+\end{frame}
+
+\begin{frame}
+\frametitle{Variational Regularisation: Key Assumptions}
+To guarantee mathematical well-posedness, we require structural assumptions on the space and functional (based on \cite{benning2018modern}).
+
+\begin{theoremblock}{Key Assumptions (Informal)}
+    \begin{itemize}
+        \item \textbf{Space Topology:} We work in spaces (often dual spaces like $Z^*$) where bounded sets are weakly-star compact.
+        \item \textbf{Convexity \& Continuity:} The data term $F$ and regularisation functional $J$ should be proper, convex, and lower semi-continuous (l.s.c.).
+        \item \textbf{Coercivity:} The objective functional must define bounded level sets, i.e.
+        $$ F(Ku, g) \le a \text{ and } J(u) \le b \implies \|u\|_\mathcal{U} \le C(a, b, \|g\|) $$
+        This ensures minimisers do not escape to infinity.
+    \end{itemize}
+\end{theoremblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Well-Posedness \& Stability}
+Under these assumptions, the method is a valid Regularisation Operator.
+
+\begin{theoremblock}{Theoretical Guarantees}
+    \begin{itemize}
+        \item \textbf{Existence:} The set of minimisers $R_\alpha(f^\delta)$ is non-empty.
+        \item \textbf{Uniqueness:} If the objective is strictly convex, the solution is unique.
+        \item \textbf{Stability:} The mapping is continuous with respect to data perturbations. 
+        
+        If $f^{\delta_n} \to f^\delta$, any sequence of minimisers $u_n \in R_\alpha(f^{\delta_n})$ has a subsequence converging (weakly-*) to a solution $u^* \in R_\alpha(f^\delta)$.
+    \end{itemize}
+\end{theoremblock}
+\pause
+This confirms that variational regularisation satisfies Hadamard's / John's conditions for well-posedness (for fixed $\alpha$).
+\end{frame}
+
+%================================================================%
+% Section 2: Selecting Solutions
+%================================================================%
+\section{Selecting Solutions}
+
+\begin{frame}
+\frametitle{Best Approximate Solutions and Selection Operators}
+  \begin{theoremblock}{Best Approximate Solution}
+    Given an error measure $F: \V \times \V \to \R_+ \cup \{+\infty\}$, we call $\hat{u} \in \U$ a \textbf{best approximate solution} of $Ku=f$ with respect to $F$ if
+    $$ F(K\hat{u}, f) \le F(Ku, f) \quad \text{for all } u \in \U $$
+
+    \vspace{-0.2cm}
+  \end{theoremblock}
+  \pause
+  \begin{theoremblock}{Selection Operator}
+    A multivalued operator $\Scal: \Range(K) \rightrightarrows \U$ is called a \textbf{selection operator} if $\Scal(Ku) \subset \{ u \} + \Ncal(K)$ for all $u \in \U$.
+    \pause
+    A best approximate solution $\hat{u}$ is called \textbf{prior selected solution} if $\hat{u} \in \Scal(K\hat{u})$.\pause
+    \begin{itemize}
+    \item Often, $\Scal(f')$ selects solutions from the set of best approximate solutions for data $f'$ by minimising a secondary (regularisation) functional.
+    \end{itemize}
+  \end{theoremblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Examples of Selection Operators}
+  Let $K: L^2(\Omega) \to L^2(\Sigma)$ or similar Hilbert spaces.
+  \begin{exampleblock}{Selection via Exact Fit (Minimum Norm)}
+    If $F(Ku,f) = \iota_{\{0\}}(f - Ku) = \begin{cases} 0 & Ku=f \\ \infty & \text{else} \end{cases}$.
+    \pause
+    The best approximate solutions are exact solutions $\{u \in L^2(\Omega) \mid Ku=f\}$.
+    \pause
+    A selection operator can be defined as\vspace{-0.5em}
+    $$ \Scal(f) = \argmin_{u \in L^2(\Omega)} \left\{ \norm{u}_{L^2(\Omega)} \mid Ku = f \right\} $$\vspace{-2em}
+    
+    This yields
+    $$ \Scal(f) = \begin{cases} \{ \Kdag f \} & \text{if } f \in \Range(K) \\ \emptyset & \text{if } f \notin \Range(K) \end{cases} \, , $$
+    where $\Kdag$ is the Moore-Penrose pseudo-inverse of $K$.
+  \end{exampleblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Examples of Selection Operators (continued)}
+  \begin{exampleblock}{Selection via Least Squares (Minimum Norm)}
+    Let $F(Ku,f) = \frac{1}{2} \norm{Ku-f}_{L^2(\Sigma)}^2$.
+    \pause
+    Best approximate solutions are least-squares solutions, satisfying $K^*Ku = K^*f$.
+    \pause
+    A selection operator can be defined as
+    $$ \Scal(f) = \argmin_{u \in L^2(\Omega)} \left\{ \norm{u}_{L^2(\Omega)} \mid K^*Ku = K^*f \right\} $$\pause
+    This yields
+      $$ \Scal(f) = \begin{cases} \{ \Kdag f \} & \text{if } f \in \Dom(K^\dagger) = \Range(K) \oplus \Range(K)^\bot  \\ \emptyset & \text{if } f \in \overline{\Range(K)} \setminus \Range(K) \end{cases} \, , $$
+    where $\Kdag$ is the Moore-Penrose pseudo-inverse of $K$.
+  \end{exampleblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{J-minimising solutions}
+In the context of general variational regularisation, this concept generalises:
+\begin{definition}[$J$-minimising solution]
+The \textbf{true solution} $u^\dagger$ is defined as the solution to $Ku=f$ selected by the prior $J$:
+$$ u^\dagger \in \argmin_{u \in \U} \{ J(u) \mid K u = f \} \, . $$
+\end{definition}
+
+\pause
+This corresponds to a selection operator $\mathcal{S}$ defined by $J$ and $F(Ku,f) = \iota_{\{0\}}(f - Ku)$.
+\end{frame}
+
+\begin{frame}
+\frametitle{Optimality Conditions for $u^\dagger$}
+Consider the constrained problem: $\min J(u)$ s.t. $Ku=f$.
+Using Lagrange multipliers (primal-dual formulation), this is equivalent to finding a saddle point of:
+$$ \mathcal{L}(u, v) = J(u) + \inner{v}{f - Ku}_{\mathcal{V}} $$
+where $v \in \mathcal{V}$ is the dual variable.
+
+\pause
+\textbf{First Order Conditions:}
+\begin{enumerate}
+    \item Differentiate w.r.t $v$: $f - Ku^\dagger = 0 \implies Ku^\dagger = f$.
+    \item Subgradient w.r.t $u$: $0 \in \partial J(u^\dagger) - K^*v$.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{The Source Condition}
+The second optimality condition gives us the fundamental assumption required for convergence rates.
+
+\begin{definition}[Source Condition]
+\label{def:source_condition}
+A solution $u^\dagger$ satisfies the \textbf{source condition} with respect to $J$ if there exists a \textbf{source element} $v \in \mathcal{V}$ such that
+\begin{equation}
+    K^* v \in \partial J(u^\dagger) \, . \tag{SC}\label{eq:sc}
+\end{equation}
+\end{definition}
+
+\pause
+\begin{itemize}
+    \item \textbf{Interpretation:} The subgradient of the regularisation function(al) at the true solution must lie in the range of the adjoint operator $\mathcal{R}(K^*)$.
+    \item This implies $u^\dagger$ is not "too rough" (it has some regularity related to the smoothing properties of $K$).
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Source Condition Examples}
+  \frametitle{Source Condition Examples}
+  Example: Let $K = I$ be the identity operator and $J = \text{TV}$ the (isotropic) total variation.
+  
+  \vspace{0.5em}
+  \begin{figure}
+    \centering
+    \begin{minipage}{0.32\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{regularisation/original_image_astronaut.png}\\
+      $f = u^\dagger$ (ground truth)
+    \end{minipage}\pause
+    \hfill
+    \begin{minipage}{0.32\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{regularisation/tv_reconstructed_astronaut_image_denoising.png}\\
+      $\Scal(u^\dagger)$
+    \end{minipage}\pause
+    \hfill
+    \begin{minipage}{0.32\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{regularisation/source_condition_element_astronaut_denoising.png}\\
+      $v^\dagger$ (source condition element)
+    \end{minipage}
+  \end{figure}
+\end{frame}
+
+\begin{frame}{Source Condition Examples}
+  \frametitle{Source Condition Examples}
+  Example: Let $K = \cdot \ast h$ be a motion blur operator and $J = \text{TV}$ the (isotropic) total variation.
+  
+  \vspace{0.5em}
+  \begin{figure}
+    \centering
+    \begin{minipage}{0.32\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{regularisation/blurred_image_astronaut.png}\\
+      $f = u^\dagger \ast h$ (blurred image)
+    \end{minipage}\pause
+    \hfill
+    \begin{minipage}{0.32\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{regularisation/tv_reconstructed_astronaut_image_deblurring.png}\\
+      $\Scal(f)$
+    \end{minipage}\pause
+    \hfill
+    \begin{minipage}{0.32\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{regularisation/source_condition_element_astronaut_deblurring.png}\\
+      $v^\dagger$ (source condition element)
+    \end{minipage}
+  \end{figure}
+\end{frame}
+
+%================================================================%
+% Section 3: Convergence Analysis & Bregman Distances
+%================================================================%
+\section{Convergence Analysis}
+
+\begin{frame}
+\frametitle{How do we measure error?}
+To show $u_\alpha^\delta \to u^\dagger$, we need a metric.
+\begin{itemize}
+    \item For Tikhonov ($J(u)=\|u\|^2$), we used the norm $\|u_\alpha^\delta - u^\dagger\|$.
+    \item For general convex $J$ (like $\ell^1$), the norm is often too weak or hard to estimate directly.
+\end{itemize}
+
+\pause
+\textbf{Solution:} Use the geometry induced by the convex functional $J$ itself.
+
+\begin{definition}[Bregman Distance \cite{bregman,kiwiel1997proximal}]
+Let $J$ be convex with subgradient $p \in \partial J(v)$. The \textbf{Bregman distance} is defined as
+$$ D_J^p(u, v) := J(u) - J(v) - \inner{p}{u - v} \, . $$
+\end{definition}
+It measures the difference between $J(u)$ and its linearisation at $v$.
+\end{frame}
+
+\begin{frame}{Visualising Bregman Distance: $J(u) = u \log(u) - u$}
+  \begin{minipage}[t]{0.48\textwidth}
+    \vspace{0pt}
+    \begin{tikzpicture}[scale=1.2]
+      % Define the function J(u) = u*ln(u) - u
+      % and its derivative J'(u) = ln(u)
+      
+      % Axes
+      \draw[->] (0,0) -- (4,0) node[right] {$u$};
+      \draw[->] (0,-1.5) -- (0,2.2) node[above] {$J(u)$};
+      
+      % Grid (lighter and less dense)
+      \draw[help lines, opacity=0.2] (0,-1.5) grid[step=0.5] (4,2);
+      
+      % Function curve J(u) = u*ln(u) - u
+      \draw[blue, thick, domain=0.15:3.7] plot (\x, {\x*ln(\x) - \x});
+      
+      % Point u2 where we compute the subgradient
+      \coordinate (u2) at (1.5, {1.5*ln(1.5) - 1.5});
+      \fill[red] (u2) circle (2pt);
+      \node[red, above left] at (u2) {$(u_2, J(u_2))$};
+      
+      % Point u1 where we measure the distance
+      \coordinate (u1) at (3, {3*ln(3) - 3});
+      \fill[green!60!black] (u1) circle (2pt);
+      \node[green!60!black, above right] at (u1) {$(u_1, J(u_1))$};
+      
+      % Tangent line at u2: y = J(u2) + J'(u2)*(x - u2)
+      % J'(u2) = ln(1.5), J(u2) = 1.5*ln(1.5) - 1.5
+      \draw[red, thick, dashed] (0.8, {1.5*ln(1.5) - 1.5 + ln(1.5)*(0.8 - 1.5)}) -- 
+                                (3.8, {1.5*ln(1.5) - 1.5 + ln(1.5)*(3.8 - 1.5)});
+      
+      % Point on tangent at u1
+      \coordinate (tangent_u1) at (3, {1.5*ln(1.5) - 1.5 + ln(1.5)*(3 - 1.5)});
+      \fill[orange] (tangent_u1) circle (1.5pt);
+      
+      % Bregman distance visualization
+      \draw[orange, thick, <->] (tangent_u1) -- (u1);
+      \node[orange, left, font=\small] at ($(tangent_u1)!0.5!(u1) + (-0.3,0)$) {$D_J$};
+      
+      % Function label (moved to avoid overlap)
+      \node[blue, above, font=\small] at (1, 1.5) {$J(u) = u \log(u) - u$};
+      
+      % Tangent label (moved and made smaller)
+      \node[red, below left, font=\footnotesize] at (1.2, -1.2) {Tangent at $u_2$};
+      
+      % Axis labels
+      \node[below, font=\small] at (1.5,0) {$u_2$};
+      \node[below, font=\small] at (3,0) {$u_1$};
+      \draw[dashed, opacity=0.5] (1.5,0) -- (u2);
+      \draw[dashed, opacity=0.5] (3,0) -- (u1);
+    \end{tikzpicture}
+  \end{minipage}%
+  \hfill%
+  \begin{minipage}[t]{0.48\textwidth}
+    \vspace{0pt}
+    \begin{block}{Interpretation}
+      \begin{itemize}
+        \item \textbf{Function}: Convex for $u > 0$
+        \item \textbf{Derivative}: $J'(u) = \log(u)$
+        \item \textbf{Subgradient}: $p_2 = \log(u_2)$ at point $u_2$
+      \end{itemize}
+    \end{block}
+    
+    \begin{block}{Bregman Distance}
+      \vspace{-1.7em}
+      \begin{align*}
+        D_J^{\log(u_2)}(u_1, u_2) &= u_1 \log\left(\frac{u_1}{u_2}\right) + u_2 - u_1
+      \end{align*}
+      
+      \vspace{-0.6em}This is the \textbf{Kullback-Leibler divergence} between $u_1$ and $u_2$.
+    \end{block}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}
+\frametitle{Symmetric Bregman Distance}
+The Bregman distance is generally not symmetric ($D(u,v) \neq D(v,u)$).
+For convergence proofs, the \textbf{Symmetric Bregman Distance} is often more convenient.
+
+\begin{definition}
+Given $p \in \partial J(u)$ and $q \in \partial J(v)$, the symmetric Bregman distance is:
+\begin{align*}
+    D_J^{\text{symm}}(u, v) &= D_J^q(u, v) + D_J^p(v, u) \\
+    &= \inner{p - q}{u - v}
+\end{align*}
+\end{definition}
+\pause
+This arises naturally because subgradient operators are monotonic: $\inner{p-q}{u-v} \ge 0$.
+\end{frame}
+
+\begin{frame}{Recap: Error Estimates \& Bregman Distances}
+  We are interested in error estimates for variational regularisation with scalar parameter, i.e.
+  $$ R_\alpha(f^\delta) = u_\alpha^\delta \in \argmin_{u \in \U} \underbrace{\left\{\frac{1}{2}\norm{Ku-f^\delta}_\V^2 + \alpha J(u)\right\}}_{=:\Phi(u)} $$
+  Let $u^\dagger$ be the true solution with exact data $f = Ku^\dagger$.
+  \pause
+  \begin{block}{Key Ingredients}
+    \begin{itemize}
+        \item \textbf{Optimality Condition for $u_\alpha^\delta$:}
+              $$ 0 \in \partial \Phi(u_\alpha^\delta) \, . $$
+              This implies there exists $p_\alpha \in \partial J(u_\alpha^\delta)$ such that
+              $ K^*(Ku_\alpha^\delta - f^\delta) + \alpha p_\alpha = 0 $.\pause
+        \item \textbf{Source Condition for $u^\dagger$:} there exists $v \in \V$ such that \eqref{eq:sc} is satisfied (i.e., $K^\ast v \in \partial J(u^\dagger)$).
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+% \begin{frame}
+% \frametitle{Deriving the Error Estimate (Step 1)}
+% We want to bound the error between the regularised solution $u_\alpha^\delta$ and true solution $u^\dagger$.
+
+% \textbf{1. Optimality of $u_\alpha^\delta$:}
+% $$ \nabla_u \left( \frac{1}{2}\|Ku_\alpha^\delta - f^\delta\|^2 + \alpha J(u_\alpha^\delta) \right) = 0 $$
+% $$ \implies K^*(Ku_\alpha^\delta - f^\delta) + \alpha p_\alpha = 0 \quad \text{for some } p_\alpha \in \partial J(u_\alpha^\delta) $$
+
+% \pause
+% \textbf{2. Use the Source Condition for $u^\dagger$:}
+% There exists $v$ such that $K^*v \in \partial J(u^\dagger)$. Let's call this subgradient $p^\dagger = K^*v$.
+% \end{frame}
+
+\begin{frame}{Deriving Error Estimates: Step 1 (Main Equation)}
+  \frametitle{Deriving Error Estimates: Step 1 (Main Equation)}
+  \begin{enumerate}
+    \item From the optimality condition we have  $K^*(Ku_\alpha^\delta - f^\delta) + \alpha p_\alpha = 0$.
+    \pause
+    \item Subtracting the source condition element $v$ yields
+          $$ K^*(Ku_\alpha^\delta - f^\delta) + \alpha (p_\alpha - K^*v) = -\alpha K^*v $$
+    \vspace{-1.5em}\pause
+    \item Take the dual product with $u_\alpha^\delta - u^\dagger$ leads to
+    \begin{align*}
+     \inner{Ku_\alpha^\delta - f^\delta}{K(u_\alpha^\delta - u^\dagger)}_\V + \alpha \inner{p_\alpha - K^*v}{u_\alpha^\delta - u^\dagger}_\U &= -\alpha \inner{K^*v}{u_\alpha^\delta - u^\dagger}_\U \\
+     &= -\alpha \inner{v}{K(u_\alpha^\delta - u^\dagger)}_\V 
+    \end{align*}
+    \vspace{-1em}\pause
+    \item Recognising that $\inner{p_\alpha - K^*v}{u_\alpha^\delta - u^\dagger}_\U = D_{J}^{\text{symm}}(u_\alpha^\delta, u^\dagger)$, where the specific subgradients $p_\alpha \in \partial J(u_\alpha^\delta)$ and $K^*v \in \partial J(u^\dagger)$ are used
+    \pause
+    \item Hence, with $f = Ku^\dagger$, the previous equation becomes
+    $$ \inner{Ku_\alpha^\delta - f^\delta}{Ku_\alpha^\delta - f}_\V + \alpha D_{J}^{\text{symm}}(u_\alpha^\delta, u^\dagger) = \alpha \inner{v}{f - Ku_\alpha^\delta}_\V $$
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Deriving Error Estimates: Step 2 (Using Identities)}
+  \frametitle{Deriving Error Estimates: Step 2 (Using Identities)}
+  From the previous slide we have the equation
+  $$ \inner{Ku_\alpha^\delta - f^\delta}{Ku_\alpha^\delta - f}_\V + \alpha D_{J}^{\text{symm}}(u_\alpha^\delta, u^\dagger) = \alpha \inner{v}{f - Ku_\alpha^\delta}_\V $$
+  \pause
+  We use two standard algebraic identities for inner products:
+  \begin{enumerate}
+    \item $\inner{a-b}{a-c}_\V = \frac{1}{2}\norm{a-c}_\V^2 + \frac{1}{2}\norm{a-b}_\V^2 - \frac{1}{2}\norm{c-b}_\V^2$.
+        Applying this to the first term with $a=Ku_\alpha^\delta, b=f^\delta, c=f$ yields
+        $$ \inner{Ku_\alpha^\delta - f^\delta}{Ku_\alpha^\delta - f}_\V = \frac{1}{2}\norm{Ku_\alpha^\delta - f}_\V^2 + \frac{1}{2}\norm{Ku_\alpha^\delta - f^\delta}_\V^2 - \frac{1}{2}\norm{f - f^\delta}_\V^2 \, .$$
+    \vspace{-1em}\pause
+    \item $\inner{x}{y}_\V = \frac{1}{2}\norm{x}_\V^2 + \frac{1}{2}\norm{y}_\V^2 - \frac{1}{2}\norm{x-y}_\V^2$.
+        Applying this to the right-hand-side yields
+        $$ \alpha\inner{v}{f - Ku_\alpha^\delta}_\V = \frac{\alpha^2}{2}\norm{v}_\V^2 + \frac{1}{2}\norm{Ku_\alpha^\delta - f}_\V^2 - \frac{1}{2}\norm{Ku_\alpha^\delta - f + \alpha v}_\V^2 \, .$$
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Deriving Error Estimates: Step 3 (Combining)}
+  \frametitle{Deriving Error Estimates: Step 3 (Combining)}
+  Substituting the identities into the main equation from Step 1 leads to
+  \begin{align*}
+    &\left( \frac{1}{2}\norm{Ku_\alpha^\delta - f}_\V^2 + \frac{1}{2}\norm{Ku_\alpha^\delta - f^\delta}_\V^2 - \frac{1}{2}\norm{f - f^\delta}_\V^2 \right) + \alpha D_{J}^{\text{symm}}(u_\alpha^\delta, u^\dagger) \\
+    &= \left( \frac{\alpha^2}{2}\norm{v}_\V^2 + \frac{1}{2}\norm{Ku_\alpha^\delta - f}_\V^2 - \frac{1}{2}\norm{Ku_\alpha^\delta - f + \alpha v}_\V^2 \right)
+  \end{align*}
+  \pause
+  The term $\frac{1}{2}\norm{Ku_\alpha^\delta - f}_\V^2$ cancels on both sides. Rearranging leaves us with
+  \begin{align*}
+  \frac{1}{2}\norm{Ku_\alpha^\delta - f + \alpha v}_\V^2 + \frac{1}{2}\norm{Ku_\alpha^\delta - f^\delta}_\V^2 + \alpha D_{J}^{\text{symm}}(u_\alpha^\delta, u^\dagger) = \frac{1}{2}\norm{f - f^\delta}_\V^2 + \frac{\alpha^2}{2}\norm{v}_\V^2
+  \end{align*}
+\end{frame}
+
+\begin{frame}{Deriving Error Estimates: Step 4 (Bounding)}
+  \frametitle{Deriving Error Estimates: Step 4 (Bounding)}  
+  \begin{block}{The Error Bound}
+  Since the first two terms on the left-hand-side are non-negative, we observe
+  $$ \alpha D_{J}^{\text{symm}}(u_\alpha^\delta, u^\dagger) \le \frac{1}{2}\norm{f - f^\delta}_\V^2 + \frac{\alpha^2}{2}\norm{v}_\V^2 $$
+  \pause
+  With the noise estimate $\norm{f - f^\delta}_\V \le \delta$ we further obtain
+  $$ D_{J}^{\text{symm}}(u_\alpha^\delta, u^\dagger) \le \frac{\delta^2}{2\alpha} + \frac{\alpha}{2}\norm{v}_\V^2 $$
+  This is a common form of error estimate for variational regularisation (for quadratic fidelity terms).
+  \end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{Interpretation of Error Bound}
+\begin{theoremblock}{Interpretation}
+\begin{itemize}
+    \item \textbf{Noise term:} $\frac{\delta^2}{2\alpha}$. (Blows up if $\alpha$ is too small).
+    \item \textbf{Bias term:} $\frac{\alpha}{2}\|v\|^2$. (Increases if $\alpha$ is too large).
+    \item The source element norm $\|v\|$ acts as a "smoothness constant".
+\end{itemize}
+\end{theoremblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Convergence Rate $\mathcal{O}(\delta)$}
+How do we choose $\alpha$ to minimise the error bound $\frac{\delta^2}{2\alpha} + \frac{\alpha}{2}\|v\|^2$?
+
+\pause
+\begin{block}{Optimal Parameter Choice}
+We balance the two terms: $\frac{\delta^2}{\alpha} \approx \alpha \implies \alpha \sim \delta$.
+Specifically, choose $\alpha(\delta) = \frac{\delta}{\|v\|}$.
+\end{block}
+
+\pause
+Substituting this back:
+$$ D_J^{\text{symm}}(u_\alpha^\delta, u^\dagger) \le \frac{\delta^2}{2(\delta/\|v\|)} + \frac{\delta/\|v\|}{2}\|v\|^2 = \frac{\delta \|v\|}{2} + \frac{\delta \|v\|}{2} = \delta \|v\| $$
+
+\textbf{Conclusion:} Under the source condition, we achieve a linear convergence rate $\mathcal{O}(\delta)$ in the symmetric Bregman distance.
+\end{frame}
+
+%================================================================%
+% Section 4: Advanced Examples
+%================================================================%
+\section{Advanced Priors: Beyond Tikhonov}
+
+\begin{frame}
+\frametitle{Why go beyond Tikhonov?}
+\begin{columns}
+\column{0.5\textwidth}
+\textbf{Tikhonov ($J(u)=\|u\|_2^2$):}
+\begin{itemize}
+    \item Penalises large values quadratically.
+    \item Leads to smooth, "blurry" solutions.
+    \item Cannot recover sharp edges or sparse signals cleanly.
+\end{itemize}
+
+\column{0.5\textwidth}
+\textbf{Motivation:}
+\begin{itemize}
+    \item Real-world signals often have specific structures:
+    \item \textbf{Sparse} (only few non-zero coefficients).
+    \item \textbf{Piecewise Constant} (images with objects).
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}
+\frametitle{Example 1: Sparsity and LASSO}
+Assume the solution $u \in \mathbb{R}^n$ is \textbf{sparse} (mostly zeros).
+We use the $\ell^1$-norm: $J(u) = \|u\|_1 = \sum |u_i|$.
+
+\begin{exampleblock}{LASSO (Least Absolute Shrinkage and Selection Operator)}
+$$ \min_{u} \frac{1}{2}\|Ku - f^\delta\|_2^2 + \alpha \|u\|_1 $$
+\end{exampleblock}
+
+\pause
+\begin{itemize}
+    \item Convex but non-differentiable at 0.
+    \item The corresponding proximal operator ($K = I$) is \textbf{Soft Thresholding} (sets small values exactly to 0).
+    \item Why does it promote sparsity? Geometry of the unit ball.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Geometry of Sparsity ($\ell^1$ vs $\ell^2$)}
+Minimising norm s.t. constraint: $\min_u \|u\|_p$ subject to $2u_1 + u_2 = 2$ (a linear constraint).
+
+\vspace{1em}
+
+\begin{columns}
+    % --- LEFT COLUMN: L2 CASE ---
+    \begin{column}{0.48\textwidth}
+    \centering
+    \textbf{$\ell^2$ Norm (Ridge)}
+    \begin{tikzpicture}[scale=1.3]
+        % Axes
+        \draw[->, gray] (-1.2,0) -- (1.5,0) node[right, black] {\scriptsize $u_1$};
+        \draw[->, gray] (0,-1.2) -- (0,1.5) node[above, black] {\scriptsize $u_2$};
+        
+        % Constraint Line: 2x + y = 2
+        % Normal is (2,1). L2 solution is k(2,1).
+        % 2(2k) + k = 2 -> 5k=2 -> k=0.4. Point (0.8, 0.4).
+        % Radius = sqrt(0.8^2 + 0.4^2) = sqrt(0.8) approx 0.894
+        \draw[thick, black] (0.2, 1.6) -- (1.2, -0.4);
+        \node[rotate=-63, anchor=south, inner sep=1pt] at (0.3, 1.4) {\tiny Constraint};
+
+        % L2 Ball (Circle)
+        \draw[thick, blue] (0,0) circle (0.8944);
+        \node[blue] at (-0.4, -0.4) {\scriptsize $\ell^2$};
+        
+        % Intersection
+        \fill[blue] (0.8, 0.4) circle (1.5pt);
+        \draw[dashed, blue] (0,0) -- (0.8, 0.4);
+        \node[blue, right, align=left, font=\tiny] at (0.8, 0.5) {Dense\\$(0.8, 0.4)$};
+    \end{tikzpicture}
+    \end{column}
+    
+    % --- RIGHT COLUMN: L1 CASE ---
+    \begin{column}{0.48\textwidth}
+    \centering
+    \textbf{$\ell^1$ Norm (Lasso)}
+    \begin{tikzpicture}[scale=1.3]
+        % Axes
+        \draw[->, gray] (-1.2,0) -- (1.5,0) node[right, black] {\scriptsize $u_1$};
+        \draw[->, gray] (0,-1.2) -- (0,1.5) node[above, black] {\scriptsize $u_2$};
+        
+        % Constraint Line: 2x + y = 2 (Same line)
+        \draw[thick, black] (0.2, 1.6) -- (1.2, -0.4);
+
+        % L1 Ball (Diamond)
+        % Hits axis at (1,0) -> Radius 1
+        \draw[thick, red] (1,0) -- (0,1) -- (-1,0) -- (0,-1) -- cycle;
+        \node[red] at (-0.4, -0.4) {\scriptsize $\ell^1$};
+        
+        % Intersection
+        \fill[red] (1,0) circle (1.5pt);
+        \node[red, above right, align=left, font=\tiny] at (1, 0.05) {Sparse\\$(1, 0)$};
+    \end{tikzpicture}
+    \end{column}
+\end{columns}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Example 2: Total Variation (TV)}
+For imaging, we often want to preserve edges (discontinuities) but remove noise.
+Tikhonov blurs edges. $\ell^1$ on pixels doesn't enforce spatial correlation.
+
+\pause
+\begin{exampleblock}{Total Variation (TV) Regularisation (e.g., for Images with sharp edges)}
+    $$ R_\alpha(f^\delta) = \argmin_{u} \left\{ \frac{1}{2}\norm{Ku - f^\delta}^2 + \alpha \text{TV}(u) \right\} $$
+    where $\text{TV}(u) = \sup_{\varphi \in \{ \phi \in C_0^\infty(\Omega; \mathbb{R}^n) \mid \norm{\phi(x)}_2 \leq 1 \} } \int_\Omega u(x) \, \text{div} \varphi(x) \, dx \approx \int_\Omega | (\nabla u)(x) | dx$.
+\end{exampleblock}
+
+\begin{itemize}
+    \item Promotes \textbf{sparsity in the gradient domain}.
+    \item Solutions are \textbf{Piecewise Constant} (Cartoon-like).
+    \item Preserves sharp jumps (edges) while flattening noise in homogeneous regions.
+    \item Used extensively in MRI, Denoising, Deblurring.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Comparison of Priors}
+
+\begin{table}[]
+\centering
+\begin{tabular}{l | l | l}
+\textbf{Prior / Regulariser} & \textbf{Penalty $J(u)$} & \textbf{Properties} \\
+\hline
+\rule{0pt}{3ex}Tikhonov & $\|u\|_2^2$ & Smooth, unique, easy to compute (linear). \\
+& & Blurs edges. \\
+\hline
+\rule{0pt}{3ex}LASSO / Sparse & $\|u\|_1$ & Sparse solutions (zeros). \\
+& & Non-linear, requires proximal algs. \\
+\hline
+\rule{0pt}{3ex}Total Variation & $\sim \|\nabla u\|_1$ & Piecewise constant, preserves edges. \\
+& & "Staircase" effect. \\
+\end{tabular}
+\end{table}
+
+\pause
+\vspace{1em}
+\textbf{Note:} All these fit into the variational framework:
+$$ u_\alpha^\delta \in \argmin \{ F(Ku, f) + \alpha J(u) \} $$
+and convergence is guaranteed if the Source Condition ($K^*v \in \partial J(u^\dagger)$) holds.
+\end{frame}
+
+%================================================================%
+% Conclusion
+%================================================================%
+\section{Conclusion}
+
+\begin{frame}
+\frametitle{Summary \& Next Steps}
+\begin{enumerate}
+    \item \textbf{Well-Posedness:} Variational regularisation provides stable, existent minimisers.
+    \item \textbf{Selection Operator:} The rigorous way to define "true" solution and smoothness. It implies source condition ($K^*v \in \partial J(u^\dagger)$).
+    \item \textbf{Bregman Distances:} The natural error measure for convex regularisation.
+    \item \textbf{Convergence Rate:} We proved $D_J^{\text{symm}}$ is in $\mathcal{O}(\delta)$ when $\alpha \sim \delta$.
+    \item \textbf{Flexibility:} The framework supports non-quadratic, non-smooth function(al)s like LASSO and TV, allowing us to model sparsity and edges.
+\end{enumerate}
+
+\vspace{1em}
+\pause
+\begin{block}{Next Time: Data-Driven Regularisation}
+Next week we will move to data-driven methods. In particular, we will focus on data-driven spectral regularisation and bilevel optimisation.
+\end{block}
+\end{frame}
+
+\begin{frame}[allowframebreaks]
+\frametitle{References}
+\bibliographystyle{plain}
+% Using the shared bibliography file from previous lectures
+\bibliography{../../Lecture_Notes/references} 
+\end{frame}
+
+\end{document}

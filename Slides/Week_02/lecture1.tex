@@ -1,0 +1,500 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usetikzlibrary{calc, positioning, arrows.meta}
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{xcolor}
+
+% Define custom colours (from uclcolors.sty snippet)
+\definecolor{darkpurple}{cmyk}{0.32,0.42,0,0.55}
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{midred}{cmyk}{0,0.79,1,0}
+
+\setbeamercovered{transparent}
+
+% Maths Shorthand
+\newcommand{\norm}[1]{\left\| #1 \right\|}
+\newcommand{\inner}[2]{\left\langle #1, #2 \right\rangle}
+\newcommand{\R}{\mathbb{R}}
+\DeclareMathOperator*{\argmin}{argmin}
+
+% Theorem-like environments
+\newtheorem{proposition}{Proposition}
+
+% Define theoremblock environment
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Title Information
+%================================================================%
+\title{Regularisation Theory}
+\subtitle{Lecture 1: The Need for Regularisation \& Spectral Methods}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[0.5cm] 20 January 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Overview ---
+\begin{frame}
+\frametitle{Lecture Overview}
+\begin{block}{Goal}
+To establish why direct inversion fails for ill-posed problems and to introduce the mathematical framework of \textbf{Regularisation}, specifically focusing on \textbf{Spectral Methods}.
+\end{block}
+
+\tableofcontents
+\end{frame}
+
+%================================================================%
+% Section 1: Motivation
+%================================================================%
+\section{Motivation: The Instability of Inverse Problems}
+
+\begin{frame}
+\frametitle{Recap: The Ill-Posed Nature of Inverse Problems}
+Recall our linear inverse problem:
+$$ K u = f $$
+where $K: \mathcal{U} \to \mathcal{V}$ is a compact linear operator.
+
+\vspace{1em}
+\pause
+In the previous lecture, we analysed the \textbf{Moore-Penrose inverse} $K^\dagger$:
+$$ K^\dagger f = \sum_{j=1}^\infty \frac{1}{\sigma_j} \inner{f}{v_j}_{\mathcal{V}} u_j $$
+
+\pause
+\begin{alertblock}{The Problem}
+For compact operators, singular values decay: $\sigma_j \to 0$ as $j \to \infty$.
+Consequently, the factor $1/\sigma_j \to \infty$, leading to instability (violation of the third Hadamard / John condition \cite{hadamard1902problemes,hadamard1923lectures,john1960continuous}).
+\end{alertblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Noise Amplification}
+In reality, we never have exact data $f$. We have \textbf{noisy data} $f^\delta$, for example with an error bound of the form
+$$ \|f - f^\delta\|_{\mathcal{V}} \leq \delta \, , $$
+where $\delta > 0$ is the noise level.
+
+\vspace{1em}
+Applying the Moore-Penrose inverse directly to noisy data:
+$$ K^\dagger f^\delta = \underbrace{K^\dagger f}_{\text{True Solution}} + \underbrace{\sum_{j=1}^\infty \frac{1}{\sigma_j} \inner{f^\delta - f}{v_j}_{\mathcal{V}} u_j}_{\text{Exploding Noise}} $$
+
+\pause
+\textbf{Conclusion:} Direct inversion is not feasible. We need to approximate the ill-posed problem with a family of well-posed problems. This is \textbf{Regularisation}.
+\end{frame}
+
+%================================================================%
+% Section 2: Defining Regularisation
+%================================================================%
+\section{Defining a Regularisation Method}
+
+\begin{frame}
+\frametitle{The Regularisation Operator}
+We formalise the idea of a stable approximation.
+
+\begin{definition}[Regularisation Operator (cf. \cite{ehn})]
+\label{def:reg_operator}
+Let $\mathcal{U}$ and $\mathcal{V}$ be normed spaces. A family of operators $R_\alpha \colon \mathcal{V} \to \mathcal{U}$, parametrised by $\alpha > 0$, is called a \textbf{regularisation operator} if, for each fixed $\alpha$, the operator $R_\alpha$ is \textbf{continuous} on $\mathcal{V}$.
+\end{definition}
+
+\vspace{0.5em}
+\pause
+\begin{itemize}
+    \item \textbf{Continuity implies Stability:} If $f^{\delta_n} \to f^\delta$, then $R_\alpha(f^{\delta_n}) \to R_\alpha(f^\delta)$.
+    \item For linear operators, continuity is equivalent to boundedness.
+    \item Note: We do \emph{not} yet require $R_\alpha$ to approximate $K^\dagger$. That is convergence (discussed later).
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{The Regularisation Method}
+A regularisation operator alone is not enough; we need to know how to pick the parameter $\alpha$ based on the noise level $\delta$.
+
+\begin{definition}[Regularisation Method]
+A regularisation operator $R_\alpha$ together with a \textbf{parameter choice strategy} $\alpha_{\text{choice}}: (0, \delta_0) \times \mathcal{V} \to \mathbb{R}_{>0}$, denoted by $\alpha(\delta, f^\delta)$, forms a \textbf{regularisation method}.
+\end{definition}
+
+\vspace{1em}
+\textbf{Key Idea:} 
+\begin{itemize}
+    \item If $\delta$ is large (high noise), we need stronger regularisation (large $\alpha$).
+    \item If $\delta$ is small (low noise), we want to be closer to the true inverse (small $\alpha$).
+\end{itemize}
+\end{frame}
+
+%================================================================%
+% Section 3: Spectral Regularisation
+%================================================================%
+\section{Spectral Regularisation}
+
+\begin{frame}
+\frametitle{Spectral Regularisation: The Concept}
+The instability of $K^\dagger$ comes from $1/\sigma_j$. 
+\textbf{Spectral Regularisation} modifies the SVD expansion to filter out these unstable components.
+
+\vspace{1em}
+Recall $K^\dagger f = \sum \frac{1}{\sigma_j} \inner{f}{v_j} u_j$.
+
+\pause
+\begin{definition}[Spectral Regularisation Operator]
+A \textbf{spectral regularisation operator} $R_\alpha \colon \mathcal{V} \to \mathcal{U}$ is defined by
+\begin{align*}
+    R_\alpha f = \sum_{j=1}^\infty g_\alpha(\sigma_j) \inner{f}{v_j}_{\mathcal{V}} u_j \, ,
+\end{align*}
+where $g_\alpha \colon \mathbb{R}_{>0} \to \mathbb{R}_{\geq 0}$ are called \textbf{filter functions}.
+\end{definition}
+\end{frame}
+
+\begin{frame}
+\frametitle{Condition for Stability}
+When is a spectral operator $R_\alpha$ a valid regularisation operator? 
+It must be continuous (bounded).
+
+\begin{proposition}[Boundedness]
+A spectral operator $R_\alpha$ is bounded if and only if the filter functions $g_\alpha(\sigma)$ are uniformly bounded for a fixed $\alpha$:
+\begin{align*}
+    \sup_{\sigma > 0} |g_\alpha(\sigma)| \leq C_\alpha < \infty \, .
+\end{align*}
+In this case, $\|R_\alpha\| \leq C_\alpha$.
+\end{proposition}
+
+\pause
+\textit{Ideally, $g_\alpha(\sigma) \approx 1/\sigma$ for large $\sigma$, but stays bounded as $\sigma \to 0$.}
+\end{frame}
+
+\begin{frame}
+\frametitle{Proof of Boundedness}
+\textbf{Proof:} Using Parseval's identity (Pythagorean theorem for Hilbert spaces):
+\begin{align*}
+    \|R_\alpha f\|_{\mathcal{U}}^2 &= \left\| \sum_{j=1}^\infty g_\alpha(\sigma_j) \inner{f}{v_j} u_j \right\|^2 \\
+    \uncover<2->{&= \sum_{j=1}^\infty |g_\alpha(\sigma_j)|^2 |\inner{f}{v_j}|^2 \quad \text{(since $u_j$ are orthonormal)}} \\
+    \uncover<3->{&\leq \left(\sup_j |g_\alpha(\sigma_j)|\right)^2 \sum_{j=1}^\infty |\inner{f}{v_j}|^2} \\
+    \uncover<4->{&\leq C_\alpha^2 \|f\|_{\mathcal{V}}^2 \, .}
+\end{align*}
+\uncover<4->{Thus, the operator norm is bounded by $C_\alpha$. \qed}
+\end{frame}
+
+% --- Specific Methods ---
+
+\begin{frame}
+\frametitle{Method 1: Truncated SVD (TSVD)}
+The simplest approach: Just cut off the sum when singular values get too small (below $\alpha$).
+
+\begin{block}{TSVD Filter Function}
+$$ g_\alpha(\sigma) = \begin{cases} 1/\sigma & \text{if } \sigma \geq \alpha \\ 0 & \text{if } \sigma < \alpha \end{cases} $$
+\end{block}
+
+\vspace{0.5em}
+\textbf{Stability:} Is it bounded?
+$$ \sup_{\sigma} |g_\alpha(\sigma)| = \frac{1}{\alpha} = C_\alpha < \infty $$
+Yes, for any fixed $\alpha > 0$.
+
+\textbf{Drawback:} Sharp cutoff in frequency domain often causes ringing artefacts (Gibbs phenomenon) in spatial domain.
+\end{frame}
+
+\begin{frame}
+\frametitle{Method 2: Tikhonov Regularisation \cite{tikhonov1943stability,tikhonov1963solution,tikhonov1966stability}}
+A smoother approach: Dampen the small singular values rather than cutting them off.
+
+\begin{block}{Tikhonov Filter Function}
+$$ g_\alpha(\sigma) = \frac{\sigma}{\sigma^2 + \alpha} $$
+\end{block}
+
+\vspace{0.5em}
+\textbf{Stability:} Is it bounded?
+Max value occurs at $\sigma = \sqrt{\alpha}$.
+$$ C_\alpha = \sup_{\sigma} \frac{\sigma}{\sigma^2 + \alpha} = \frac{\sqrt{\alpha}}{2\alpha} = \frac{1}{2\sqrt{\alpha}} < \infty $$
+Yes. It is a valid regularisation operator.
+\end{frame}
+
+\begin{frame}
+\frametitle{Visualising Filter Functions}
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9]
+    \begin{axis}[
+        axis lines = left,
+        xlabel = {Singular Value $\sigma$},
+        ylabel = {$g_\alpha(\sigma)$},
+        domain=0:2,
+        samples=100,
+        legend style={at={(1.05,0.95)},anchor=north west},
+        height=6cm, width=10cm,
+        ymin=0, ymax=2.5,
+        xmin=0, xmax=2
+    ]
+    % Ideal inverse
+    \addplot [dashed, black, thick, domain=0.4:2] {1/x};
+    \addlegendentry{$1/\sigma$ (Ideal)}
+
+    % TSVD
+    \addplot [red, thick, domain=0:0.5, forget plot] {0}; 
+    \addplot [red, thick, domain=0.5:2] {1/x};
+    \addlegendentry{TSVD ($\alpha=0.5$)}
+    
+    % Tikhonov
+    \addplot [blue, thick, domain=0:2, forget plot] {x/(x^2 + 0.1)};
+    
+    \addlegendimage{blue, thick} 
+    \addlegendentry{Tikhonov ($\alpha=0.1$)}
+    \end{axis}
+\end{tikzpicture}
+\end{center}
+\small Note: For Tikhonov, $g_\alpha(\sigma) \to 0$ as $\sigma \to 0$. For TSVD, it is exactly 0 below threshold. Both approach $1/\sigma$ for large $\sigma$.
+\end{frame}
+
+\begin{frame}
+\frametitle{Tikhonov: Operator Form}
+One major advantage of Tikhonov regularisation is that it can be computed \textbf{without} the SVD.
+
+\begin{theorem}[Tikhonov Operator Form]
+The Tikhonov regularisation operator is equivalent to:
+$$ R_\alpha^{\text{Tikh}} = (K^* K + \alpha I)^{-1} K^* $$
+\end{theorem}
+
+\pause
+\textbf{Intuition:}
+\begin{itemize}
+    \item As $\alpha \to 0$, this approaches $(K^*K)^{-1}K^*$, the pseudo-inverse (Normal Equations).
+    \item The term $\alpha I$ adds "mass" to the diagonal, making the matrix or operator invertible (shifting eigenvalues away from 0).
+    \item This is also known as \textbf{Ridge Regression} in statistics.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Method 3: Landweber Iteration \cite{landweber1951iteration}}
+We can also define regularisation via iterative methods (early stopping).
+\textbf{Landweber Iteration:}
+$$ u_{k+1} = u_k + \tau K^*(f - K u_k), \quad u_0 = 0 $$
+Here, the iteration number $k$ plays the role of the regularisation parameter ($k \sim 1/\alpha$).
+
+\vspace{1em}
+\textbf{Filter Function:}
+$$ g_k(\sigma) = \frac{1}{\sigma} (1 - (1-\tau\sigma^2)^k) $$
+As $k \to \infty$, $(1-\tau\sigma^2)^k \to 0$, so $g_k(\sigma) \to 1/\sigma$.
+\end{frame}
+
+\begin{frame}
+\frametitle{Visualising Filter Functions}
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9]
+    \begin{axis}[
+        axis lines = left,
+        xlabel = {Singular Value $\sigma$},
+        ylabel = {$g_\alpha(\sigma)$},
+        domain=0:2,
+        samples=100,
+        legend style={at={(1.05,0.95)},anchor=north west},
+        height=6cm, width=10cm,
+        ymin=0, ymax=2.5,
+        xmin=0, xmax=2
+    ]
+    % Ideal inverse
+    \addplot [dashed, black, thick, domain=0.4:2] {1/x};
+    \addlegendentry{$1/\sigma$ (Ideal)}
+
+    % TSVD
+    \addplot [red, thick, domain=0:0.5, forget plot] {0}; 
+    \addplot [red, thick, domain=0.5:2] {1/x};
+    \addlegendentry{TSVD ($\alpha=0.5$)}
+    
+    % Tikhonov
+    \addplot [blue, thick, domain=0:2, forget plot] {x/(x^2 + 0.1)};
+    \addlegendimage{style={blue, thick}} 
+    \addlegendentry{Tikhonov ($\alpha=0.1$)}
+
+    % Landweber
+    \addplot [green, thick, domain=0:2, forget plot] {(1 - (1 - 0.25*x^2)^3)/x};
+    \addlegendimage{style={green, thick}} 
+    \addlegendentry{Landweber ($k=3$, $\tau=0.25$)}
+    \end{axis}
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Visualising Filter Functions}
+\vspace{0.2cm}
+\begin{center}
+\begin{tikzpicture}[scale=0.9]
+    \begin{axis}[
+        axis lines = left,
+        xlabel = {Singular Value $\sigma$},
+        ylabel = {$g_\alpha(\sigma)$},
+        domain=0:2,
+        samples=100,
+        legend style={at={(1.05,0.95)},anchor=north west},
+        height=6cm, width=10cm,
+        ymin=0, ymax=2.5,
+        xmin=0, xmax=2
+    ]
+    % Ideal inverse
+    \addplot [dashed, black, thick, domain=0.4:2] {1/x};
+    \addlegendentry{$1/\sigma$ (Ideal)}
+
+    % TSVD
+    \addplot [red, thick, domain=0:0.5, forget plot] {0}; 
+    \addplot [red, thick, domain=0.5:2] {1/x};
+    \addlegendentry{TSVD ($\alpha=0.5$)}
+    
+    % Tikhonov
+    \addplot [blue, thick, domain=0:2, forget plot] {x/(x^2 + 0.1)};
+    \addlegendimage{style={blue, thick}} 
+    \addlegendentry{Tikhonov ($\alpha=0.1$)}
+
+    % Landweber
+    \addplot [green, thick, domain=0:2, forget plot] {(1 - (1 - 0.25*x^2)^(30))/x};
+    \addlegendimage{style={green, thick}} 
+    \addlegendentry{Landweber ($k=30$, $\tau=0.25$)}
+    \end{axis}
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+%================================================================%
+% Section 4: Convergence
+%================================================================%
+\section{Convergence Analysis}
+
+\begin{frame}
+\frametitle{Stability is Not Enough}
+\begin{itemize}
+    \item We established that $R_\alpha$ is stable for fixed $\alpha > 0$.
+    \item Consider the trivial operator $R_\alpha(f) = 0$. It is extremely stable (continuous), but useless.
+    \item \textbf{Requirement:} As the data quality improves ($\delta \to 0$), our regularised solution must approach the \textbf{true solution}.
+\end{itemize}
+
+\pause
+\begin{block}{Target Solution}
+Since $Ku=f$ might have multiple solutions, we define the target $u^\dagger$ as the \textbf{minimum-norm least-squares solution} (Moore-Penrose).
+\end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{Convergent Regularisation Method}
+\begin{definition}[Convergent Method]
+A regularisation method $(R_\alpha, \alpha(\delta))$ is \textbf{convergent} if for any exact data $f$, and any sequence of noisy data satisfying $\|f - f^{\delta_n}\| \leq \delta_n \to 0$, we observe
+$$ \lim_{n \to \infty} R_{\alpha(\delta_n)}(f^{\delta_n}) = K^\dagger f \, .$$
+\end{definition}
+
+This requires choosing $\alpha(\delta)$ such that:
+\begin{enumerate}
+    \item $\alpha \to 0$ (to reduce approximation error).
+    \item $\alpha$ doesn't vanish too fast relative to $\delta$ (to control noise).
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Error Analysis: Tikhonov}
+Let's analyse the error $\|R_{\alpha}^{\text{Tikh}}f^\delta - K^\dagger f\|$. We use the triangle inequality:
+
+\begin{align*}
+    \|R_{\alpha}f^\delta - K^\dagger f\| \leq \underbrace{\|R_{\alpha}(f^\delta - f)\|}_{\text{Noise Propagation}} + \underbrace{\|R_{\alpha}f - K^\dagger f\|}_{\text{Approximation Error}}
+\end{align*}
+
+\pause
+\begin{enumerate}
+    \item \textbf{Noise Propagation:} Depends on $\|R_\alpha\|$.
+    $$ \|R_{\alpha}(f^\delta - f)\| \leq C_\alpha \delta = \frac{\delta}{2\sqrt{\alpha}} $$
+    \item \textbf{Approximation Error:} Depends on how well $g_\alpha(\sigma)$ fits $1/\sigma$.
+    Since $\lim_{\alpha \to 0} g_\alpha(\sigma) = 1/\sigma$, this term vanishes as $\alpha \to 0$.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Parameter Choice Strategy}
+To ensure convergence, we need both error terms to vanish as $\delta \to 0$.
+
+\begin{itemize}
+    \item Approximation error requires $\lim_{\delta \to 0} \alpha(\delta) = 0$.
+    \item Noise error requires $\lim_{\delta \to 0} \frac{\delta}{\sqrt{\alpha(\delta)}} = 0$.
+\end{itemize}
+
+\pause
+\begin{exampleblock}{Valid Choice}
+Choose $\alpha(\delta) = c \delta^p$ with $0 < p < 2$.
+\begin{itemize}
+    \item If we choose $\alpha(\delta) = c\delta$, we have
+    $$ \frac{\delta}{\sqrt{c \delta}} = \frac{\sqrt{\delta}}{\sqrt{c}} \to 0 $$
+    \item This choice makes Tikhonov a \textbf{convergent regularisation method}.
+\end{itemize}
+\end{exampleblock}
+\end{frame}
+
+%================================================================%
+% Conclusion
+%================================================================%
+\section{Conclusion}
+
+\begin{frame}
+\frametitle{Summary}
+\begin{itemize}
+    \item \textbf{Ill-Posedness:} Small singular values cause noise amplification in direct inversion.
+    \item \textbf{Regularisation:} Replaces the problem with a family of stable operators $R_\alpha$.
+    \item \textbf{Spectral Methods:} modify the SVD via filter functions $g_\alpha(\sigma)$.
+    \begin{itemize}
+        \item \textbf{TSVD:} Hard cutoff, simple, potential artefacts.
+        \item \textbf{Tikhonov:} Smooth damping, equivalent to $(K^*K+\alpha I)^{-1}K^*$.
+    \end{itemize}
+    \item \textbf{Convergence:} Requires a parameter choice strategy $\alpha(\delta)$ that balances approximation error and noise propagation.
+\end{itemize}
+
+\vspace{1em}
+\textbf{Next Lecture:} We will move beyond spectral methods to \textbf{Variational Regularisation} and convex optimisation.
+\end{frame}
+
+\begin{frame}[allowframebreaks]
+\frametitle{References}
+\bibliographystyle{plain}
+% Use shared references from Lecture_Notes
+\bibliography{../../Lecture_Notes/references.bib} 
+\end{frame}
+
+\end{document}

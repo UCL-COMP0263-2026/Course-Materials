@@ -1,0 +1,554 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usetikzlibrary{calc, positioning, arrows.meta}
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{xcolor}
+
+% Define custom colours
+\definecolor{darkpurple}{cmyk}{0.32,0.42,0,0.55}
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{midred}{cmyk}{0,0.79,1,0}
+
+\setbeamercovered{transparent}
+
+% Maths Shorthand
+\newcommand{\norm}[1]{\left\| #1 \right\|}
+\newcommand{\inner}[2]{\left\langle #1, #2 \right\rangle}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Kdag}{K^\dagger}
+\newcommand{\prox}{\operatorname{prox}}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\sgn}{sgn}
+
+% Define proposition environment
+\newtheorem{proposition}{Proposition}
+
+% Define theoremblock environment
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Title Information
+%================================================================%
+\title{Regularisation Theory}
+\subtitle{Lecture 2: Variational Regularisation \& Tikhonov Theory}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[0.5cm] 20 January 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Overview ---
+\begin{frame}
+\frametitle{Lecture Overview}
+\begin{block}{Objectives}
+\begin{itemize}
+    \item Reformulate \textbf{Tikhonov Regularisation} in operator form (without explicit SVD).
+    \item Transition from "Filtering" to \textbf{"Optimisation"} via Variational Regularisation.
+    \item Establish equivalence between Tikhonov reg. and minimising quadratic functional.
+    \item Introduce key tools from \textbf{Convex Analysis} (Subgradients, Fermat's Rule etc.).
+    \item Define and explore \textbf{Proximal Operator}, a crucial building block for modern algorithms.
+\end{itemize}
+\end{block}
+
+\tableofcontents
+\end{frame}
+
+%================================================================%
+% Section 1: Tikhonov Regularisation in Operator Form
+%================================================================%
+\section{Tikhonov Regularisation: Operator Form}
+
+\begin{frame}
+\frametitle{Recap: Spectral Tikhonov}
+In the previous lecture, we defined Tikhonov regularisation using the filter function:
+$$ g_\alpha(\sigma) = \frac{\sigma}{\sigma^2 + \alpha} $$
+
+\pause
+The spectral regularisation operator is:
+$$ R_\alpha^{\text{Tikh}}f = \sum_{j=1}^\infty \frac{\sigma_j}{\sigma_j^2 + \alpha} \inner{f}{v_j}_{\mathcal{V}} u_j $$
+\begin{itemize}
+    \item This effectively dampens small singular values ($\sigma_j \ll \sqrt{\alpha}$).
+    \item It approximates the Moore-Penrose inverse $K^\dagger$ as $\alpha \to 0$.
+    \item \textbf{Limitation:} Computing the full SVD is computationally expensive for large-scale problems.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Tikhonov in Operator Form}
+\only<1>{A major advantage of Tikhonov regularisation is that it has a closed-form representation independent of the SVD.}
+
+\begin{theorem}[Tikhonov Operator Form]
+\label{thm:tikhonov_form}
+The Tikhonov regularisation operator $R_\alpha^{\text{Tikh}}$ is equivalent to
+\begin{align}
+    R_\alpha^{\text{Tikh}} = (K^* K + \alpha I)^{-1} K^* \, . \label{eq:tikh_op}
+\end{align}
+\end{theorem}
+
+\only<2->{\begin{theoremblock}{Proof Sketch}
+Recall $K^* K u_j = \sigma_j^2 u_j$. Thus, $(K^* K + \alpha I) u_j = (\sigma_j^2 + \alpha) u_j$.
+Applying the inverse operator to $K^* f = \sum \sigma_j \inner{f}{v_j} u_j$ yields
+\begin{align*}
+    (K^* K + \alpha I)^{-1}K^* f &= \sum_{j=1}^\infty \sigma_j \inner{f}{v_j} (\sigma_j^2 + \alpha)^{-1} u_j = \sum_{j=1}^\infty \frac{\sigma_j}{\sigma_j^2 + \alpha} \inner{f}{v_j} u_j = R_\alpha^{\text{Tikh}}f
+\end{align*}
+\end{theoremblock}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Connection to Normal Equations}
+The operator form $(K^* K + \alpha I)^{-1} K^*$ reveals a structural link to the least-squares solution.
+
+\begin{block}{The Normal Equation Shift}
+Recall that the least-squares solution (for full rank $K$) satisfies the \textbf{Normal Equations}, i.e.
+$$ K^* K u = K^* f \implies u = (K^* K)^{-1} K^* f $$
+\end{block}
+
+\pause
+\begin{itemize}
+    \item For ill-posed problems, $K^* K$ has eigenvalues clustering at 0, making inversion unstable.
+    \item Tikhonov adds a shift $\alpha I$ to the operator $K^* K$.
+    \item Since $K^* K$ is positive semi-definite, $K^* K + \alpha I$ is \textbf{strictly positive definite} (eigenvalues $\ge \alpha$) and thus boundedly invertible.
+    \item As $\alpha \to 0$, we recover the Normal Equations solution.
+\end{itemize}
+\end{frame}
+
+%================================================================%
+% Section 2: Variational Regularisation
+%================================================================%
+\section{Variational Regularisation}
+
+\begin{frame}
+\frametitle{From Filtering to Optimisation}
+We have viewed regularisation as "filtering" singular values. 
+A more powerful perspective is \textbf{Variational Regularisation}, where solutions are found by minimising an energy functional.
+
+\vspace{1em}
+\pause
+\begin{proposition}[Variational Form of Tikhonov]
+The Tikhonov regularised solution $u_\alpha^\delta = R_\alpha^{\text{Tikh}} f^\delta$ is the unique minimiser of:
+\begin{equation}
+\min_{u \in \mathcal{U}} \left\{ \frac{1}{2} \|K u - f^\delta\|_{\mathcal{V}}^2 + \frac{\alpha}{2} \|u\|_{\mathcal{U}}^2 \right\} \, . \label{eq:tikh_variational}
+\end{equation}
+\end{proposition}
+
+\pause
+This formulation balances two competing goals:
+\begin{enumerate}
+    \item \textbf{Data Fidelity:} $\frac{1}{2} \|K u - f^\delta\|_{\mathcal{V}}^2$ (Fit the data).
+    \item \textbf{Regularisation:} $\frac{\alpha}{2} \|u\|_{\mathcal{U}}^2$ (Keep the solution norm small/stable).
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Proof of Variational Equivalence}
+\textbf{Proof:} Let $\Phi(u) = \frac{1}{2}\|Ku - f^\delta\|^2 + \frac{\alpha}{2}\|u\|^2$.
+We will see that $\Phi$ is strictly convex and differentiable, and that this implies that the minimiser is found where the gradient is zero:
+
+\begin{align*}
+    \nabla \Phi(u) &= \nabla \left( \frac{1}{2}\inner{Ku - f^\delta}{Ku - f^\delta} + \frac{\alpha}{2}\inner{u}{u} \right) \\
+    &= K^*(Ku - f^\delta) + \alpha u
+\end{align*}
+
+\pause
+Setting $\nabla \Phi(u) = 0$:
+$$ K^* K u - K^* f^\delta + \alpha u = 0 $$
+$$ (K^* K + \alpha I) u = K^* f^\delta $$
+$$ u = (K^* K + \alpha I)^{-1} K^* f^\delta $$
+This recovers the operator form derived earlier. \qed
+\end{frame}
+
+\begin{frame}
+\frametitle{General Variational Regularisation}
+This optimisation perspective allows us to generalise beyond Tikhonov. We can define a regularised solution as
+\begin{align}
+R_\alpha(f^\delta) := \argmin_{u \in \mathcal{U}} \{ F(K u, f^\delta) + \alpha J(u) \} \, . \label{eq:var_reg}
+\end{align}
+
+\pause
+\begin{description}
+    \item[Data Fidelity $F(Ku, f^\delta)$:] Measures discrepancy. e.g., squared norm (Gaussian noise), $\ell^1$ norm (Impulse noise), Kullback-Leibler-divergence (Poisson noise).
+    \item[Regulariser $J(u)$:] Encodes prior knowledge.
+    \begin{itemize}
+        \item $J(u) = \|u\|_2^2$: Smoothness/Small norm (Tikhonov).
+        \item $J(u) = \|u\|_1$: Sparsity (LASSO / Compressed Sensing).
+        \item $J(u) = \operatorname{TV}(u)$: Piecewise constant images (Edge preserving, will be introduced later).
+    \end{itemize}
+\end{description}
+\end{frame}
+
+%================================================================%
+% Section 3: Convex Analysis Prerequisites
+%================================================================%
+\section{Convex Analysis Prerequisites}
+
+\begin{frame}
+\frametitle{Why Convex Analysis?}
+To analyse general variational methods (especially with non-differentiable terms like $\ell^1$ or TV), we need tools from \textbf{Convex Analysis}.
+
+\pause
+\begin{block}{Key Advantages}
+\begin{itemize}
+    \item \textbf{Global Optimality:} For convex problems, any local minimum is a global minimum.
+    \item \textbf{Existence \& Uniqueness:} Strict convexity guarantees a unique solution.
+    \item \textbf{Subgradients:} Allow us to handle non-smooth functions (e.g., corners in $\ell^1$).
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{Convex Sets and Functions}
+\begin{definition}[Convex Set]
+A set $\mathcal{C} \subset \mathcal{U}$ is \textbf{convex} if for any $u_1, u_2 \in \mathcal{C}$ and $\lambda \in [0, 1]$ we have
+$$\lambda u_1 + (1 - \lambda)u_2 \in \mathcal{C} \, .$$
+\end{definition}
+
+\pause
+\begin{definition}[Convex Function]
+A functional $F: \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ is \textbf{convex} if its domain is convex and
+$$F(\lambda u_1 + (1 - \lambda)u_2) \leq \lambda F(u_1) + (1 - \lambda)F(u_2) \, ,$$
+
+\vspace{-0.25cm}
+for $\lambda \in [0, 1]$.
+\end{definition}
+If the inequality is strict for $u_1 \neq u_2$ and $\lambda \in (0, 1)$, then $F$ is \textbf{strictly convex}.
+\end{frame}
+
+\begin{frame}
+\frametitle{Convex Sets and Functions}
+
+\textbf{Convex Sets} (line segments stay inside):
+\begin{center}
+% 1. Disk
+\begin{tikzpicture}[scale=1.2, baseline=(lbl.base)]
+\draw[fill=blue!20] (0,0.4) circle (0.4);
+\draw[thick, blue] (0,0.4) circle (0.4);
+\node[below, name=lbl] at (0, -0.2) {\small Disk};
+\end{tikzpicture}
+\hspace{0.3cm}
+% 2. Rectangle
+\begin{tikzpicture}[scale=1.2, baseline=(lbl.base)]
+\draw[fill=green!20] (0,0) rectangle (0.8, 0.6);
+\draw[thick, green] (0,0) rectangle (0.8, 0.6);
+\node[below, name=lbl] at (0.4, -0.2) {\small Rectangle};
+\end{tikzpicture}
+\hspace{0.3cm}
+% 3. Triangle
+\begin{tikzpicture}[scale=1.2, baseline=(lbl.base)]
+\draw[fill=red!20] (0,0) -- (0.8, 0) -- (0.4, 0.7) -- cycle;
+\draw[thick, red] (0,0) -- (0.8, 0) -- (0.4, 0.7) -- cycle;
+\node[below, name=lbl] at (0.4, -0.2) {\small Triangle};
+\end{tikzpicture}
+\hspace{0.3cm}
+% 4. Non-convex (Chevron/Boomerang)
+\begin{tikzpicture}[scale=1.2, baseline=(lbl.base)]
+% Shifted slightly up to align visually with others
+\draw[fill=purple!20] (0,0) -- (0.4, 0.2) -- (0.8, 0) -- (0.4, 0.8) -- cycle;
+\draw[thick, purple] (0,0) -- (0.4, 0.2) -- (0.8, 0) -- (0.4, 0.8) -- cycle;
+\node[below, name=lbl] at (0.4, -0.2) {\small Non-convex};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.3em}
+\textbf{Convex Functions} (curve below line):
+\begin{center}
+% 1. Quadratic
+\begin{tikzpicture}[scale=1.2, baseline=(lbl.base)]
+\draw[->] (-0.3, 0) -- (0.8, 0);
+\draw[->] (0, -0.3) -- (0, 0.8);
+\draw[thick, blue, smooth, domain=-0.3:0.7] plot (\x, {(\x)^2});
+\draw[thick, dashed, blue!50] (-0.2, 0.04) -- (0.6, 0.36);
+\node[below, name=lbl] at (0.2, -0.5) {\small $x^2$};
+\end{tikzpicture}
+\hspace{0.3cm}
+% 2. Absolute Value
+\begin{tikzpicture}[scale=1.2, baseline=(lbl.base)]
+\draw[->] (-0.3, 0) -- (0.8, 0);
+\draw[->] (0, -0.3) -- (0, 0.8);
+\draw[thick, green] (-0.3, 0.3) -- (0, 0) -- (0.7, 0.7);
+\draw[thick, dashed, green!50] (-0.2, 0.2) -- (0.6, 0.6);
+\node[below, name=lbl] at (0.2, -0.5) {\small $|x|$};
+\end{tikzpicture}
+\hspace{0.3cm}
+% 3. Exponential
+\begin{tikzpicture}[scale=1.2, baseline=(lbl.base)]
+\draw[->] (-0.3, 0) -- (0.8, 0);
+\draw[->] (0, -0.3) -- (0, 0.8);
+\draw[thick, red, smooth, domain=-0.3:0.5] plot (\x, {exp(2*\x)/5});
+\draw[thick, dashed, red!50] (-0.2, 0.126) -- (0.5, 0.540);
+\node[below, name=lbl] at (0.2, -0.5) {\small $e^x$};
+\end{tikzpicture}
+\hspace{0.3cm}
+% 4. Non-convex (Gaussian Hill)
+\begin{tikzpicture}[scale=1.2, baseline=(lbl.base)]
+\draw[->] (-0.3, 0) -- (0.8, 0);
+\draw[->] (0, -0.3) -- (0, 0.8);
+% A Gaussian 'hill'. It is concave, so the chord goes UNDER the curve.
+\draw[thick, purple, smooth, domain=-0.3:0.7] plot (\x, {0.6*exp(-10*(\x-0.2)^2)});
+% The chord connects the tails, passing below the peak
+\draw[thick, dashed, purple!50] (-0.2, 0.12) -- (0.6, 0.12);
+\node[below, name=lbl] at (0.2, -0.5) {\small Bell (non-convex)};
+\end{tikzpicture}
+\end{center}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Subgradients}
+For non-differentiable convex functions (like $f(x) = |x|$ at $x=0$), the gradient is not defined. We replace it with the \textbf{subgradient}.
+
+\begin{definition}[Subgradient]
+Let $F$ be a convex functional. An element $p \in \mathcal{U}^*$ is a \textbf{subgradient} of $F$ at $u_0$ if:
+$$F(u) \geq F(u_0) + \inner{p}{u - u_0} \quad \text{for all } u \in \mathcal{U} \, .$$
+\end{definition}
+
+\pause
+\begin{itemize}
+    \item Geometric interpretation: $p$ defines a global affine underestimator (supporting hyperplane) to the graph of $F$ at $u_0$ (see next slide).
+    \item The set of all subgradients at $u_0$ is the \textbf{subdifferential} $\partial F(u_0)$.
+    \item If $F$ is differentiable at $u_0$, then $\partial F(u_0) = \{ \nabla F(u_0) \}$.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Subdifferential of the 1-Norm}
+
+\begin{columns}
+\column{0.5\textwidth}
+\textbf{Example:} Absolute value $f(x) = |x|$.
+
+At $x=0$, $f$ is non-differentiable. Any line passing through the origin with slope $p \in [-1, 1]$ stays below the graph.
+
+\vspace{0.5em}
+\begin{center}
+\begin{tikzpicture}[scale=0.8]
+    \begin{axis}[
+        axis lines=center,
+        xlabel=$x$, ylabel=$y$,
+        xmin=-2, xmax=2,
+        ymin=-1, ymax=2,
+        height=5cm, width=6cm,
+        xtick=\empty, ytick=\empty
+    ]
+    % Function |x|
+    \addplot[thick, blue, domain=-2:2] {abs(x)};
+    \addlegendentry{$|x|$}
+    
+    % Subgradient line with slope 0.5
+    \addplot[thick, red, dashed, domain=-2:2] {0.5*x};
+    \addlegendentry{$y = 0.5x$}
+    
+    % Show range of slopes?
+    \addplot[red, opacity=0.1, fill=red, fill opacity=0.1] coordinates {(-2,-2) (2,2) (2,-2) (-2,2)};
+    \end{axis}
+\end{tikzpicture}
+\end{center}
+
+\column{0.5\textwidth}
+\textbf{Mathematical Characterisation:}
+
+For the $\ell^1$-norm $J(u) = \|u\|_1 = \sum_{i} |u_i|$, the subdifferential is given component-wise:
+\begin{align*}
+p \in \partial \|u\|_1 \iff p_i \in \partial |u_i| \quad \forall i
+\end{align*}
+where the scalar subdifferential is
+\begin{align*}
+\partial |t| = 
+\begin{cases} 
+\{1\} & \text{if } t > 0 \\
+\{-1\} & \text{if } t < 0 \\
+[-1, 1] & \text{if } t = 0 
+\end{cases} \, .
+\end{align*}
+
+\vspace{0.5em}
+At zero, the subgradient is \textbf{set-valued}.
+
+\end{columns}
+\end{frame}
+
+\begin{frame}
+\frametitle{Fermat's Rule}
+How do we find the minimiser of a convex function, i.e. $u^\ast$ with $F(u^\ast) \leq F(u)$ for all $u$?
+
+\begin{theorem}[Fermat's Rule]
+Let $F$ be a proper convex functional. A point $u^*$ is a global minimiser of $F$ if and only if:
+\begin{align*}
+    0 \in \partial F(u^*) \, .
+\end{align*}
+\end{theorem}
+
+\pause
+\textbf{Proof:}
+If $0 \in \partial F(u^*)$, then by definition we have
+$$ F(u) \geq F(u^*) + \inner{0}{u - u^*} = F(u^*) \quad \forall u \, . $$
+Thus $u^*$ is a global minimiser.
+
+\vspace{0.5em}
+This generalises the classical condition $\nabla F(u^*) = 0$.
+\end{frame}
+
+%================================================================%
+% Section 4: The Proximal Operator
+%================================================================%
+\section{The Proximal Operator}
+
+\begin{frame}
+\frametitle{Handling Non-Smooth Terms}
+Many interesting regularisation functions (e.g., $\ell^1$, TV) are non-differentiable.
+We introduce the \textbf{Proximal Operator} (or Moreau envelope) to handle these terms implicitly.
+
+\begin{definition}[Proximal Operator]
+Let $J$ be a proper, l.s.c., convex functional and $\tau > 0$. The \textbf{proximal operator} is defined as
+\begin{align*}
+\prox_{\tau J}(x) := \argmin_{u \in \mathcal{U}} \left\{ \frac{1}{2}\|u - x\|^2 + \tau J(u) \right\} \, .
+\end{align*}
+\end{definition}
+
+\pause
+\begin{itemize}
+    \item Interpretation: Finds a point $u$ that is close to $x$ but also has a small value of $J(u)$.
+    \item It is a "regularised projection" or a "backward gradient step".
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Example 1: Squared Euclidean Norm}
+Let $\mathcal{U} = \mathbb{R}^n$ and $J(u) = \frac{\lambda}{2}\|u\|_2^2$. We solve the minimisation problem
+$$ \argmin_{u} \left\{ \frac{1}{2}\|u - x\|^2 + \frac{\tau\lambda}{2}\|u\|^2 \right\} \, . $$
+
+\pause
+Differentiating with respect to $u$ yields
+$$ (u - x) + \tau\lambda u = 0 \implies (1 + \tau\lambda)u = x $$
+
+\pause
+\begin{block}{Result}
+$$ \prox_{\tau \frac{\lambda}{2}\|\cdot\|^2}(x) = \frac{1}{1 + \tau\lambda} x $$
+\end{block}
+This is simply a scaling operation.
+\end{frame}
+
+\begin{frame}
+\frametitle{Example 2: $\ell^1$-Norm (Soft Thresholding)}
+Let $\mathcal{U} = \mathbb{R}^n$ and $J(u) = \|u\|_1 = \sum |u_i|$. This promotes sparsity.
+The problem decouples into 1D problems for each component $u_i$:
+$$ u_i = \argmin_{z \in \mathbb{R}} \left\{ \frac{1}{2}(z - x_i)^2 + \tau |z| \right\} $$
+
+\pause
+Using subgradients ($\partial |z| = \sgn(z)$ if $z\neq 0$, $[-1,1]$ if $z=0$):
+\begin{itemize}
+    \item If $x_i > \tau$, optimal $z = x_i - \tau$.
+    \item If $x_i < -\tau$, optimal $z = x_i + \tau$.
+    \item If $|x_i| \leq \tau$, optimal $z = 0$.
+\end{itemize}
+
+\pause
+\begin{block}{Soft Thresholding Operator $\mathcal{S}_\tau$}
+$$ [\prox_{\tau \|\cdot\|_1}(x)]_i = \mathcal{S}_\tau(x_i) := \sgn(x_i) \max(|x_i| - \tau, 0) $$
+\end{block}
+\end{frame}
+
+\begin{frame}
+\frametitle{Visualising Soft Thresholding}
+\begin{center}
+\begin{tikzpicture}[scale=1]
+    \begin{axis}[
+        axis lines = center,
+        xlabel = {$x_i$},
+        ylabel = {$\mathcal{S}_\tau(x_i)$},
+        domain=-3:3,
+        samples=100,
+        height=6cm, width=10cm,
+        xtick={-1, 1},
+        xticklabels={$-\tau$, $\tau$},
+        ytick={0},
+        legend pos=north west
+    ]
+    % Identity line
+    \addplot [dashed, gray] {x};
+    \addlegendentry{Identity}
+    
+    % Soft Thresholding (tau=1)
+    \addplot [blue, thick, domain=-3:-1] {x+1};
+    \addplot [blue, thick, domain=-1:1] {0};
+    \addplot [blue, thick, domain=1:3] {x-1};
+    \addlegendentry{Soft Thresholding}
+    
+    \end{axis}
+\end{tikzpicture}
+\end{center}
+\small Values smaller than $\tau$ are set to zero (sparsity). Large values are shrunk towards zero.
+\end{frame}
+
+%================================================================%
+% Conclusion
+%================================================================%
+\section{Conclusion}
+
+\begin{frame}
+\frametitle{Summary}
+\begin{itemize}
+    \item \textbf{Tikhonov Regularisation:} Can be formulated as an operator equation $(K^*K + \alpha I)^{-1}K^*f$ or as a variational problem.
+    \item \textbf{Variational Approach:} Moving from spectral filtering to minimising functionals $F(Ku, f) + \alpha J(u)$ allows for flexible modelling of prior knowledge.
+    \item \textbf{Convex Analysis:} Provides the mathematical foundation for these methods. Subgradients replace gradients for non-smooth terms.
+    \item \textbf{Proximal Operators:} The key computational tool for handling non-smooth functions like the $\ell^1$-norm (Soft Thresholding).
+\end{itemize}
+
+\vspace{1em}
+\textbf{Next Lecture:} We will define \textbf{convergence} for regularisation methods and analyse error estimates using \textbf{Bregman distances}.
+\end{frame}
+
+% \begin{frame}[allowframebreaks]
+% \frametitle{References}
+% \bibliographystyle{plain}
+% \bibliography{../../Lecture_Notes/references}
+% \end{frame}
+
+\end{document}
