@@ -157,7 +157,7 @@ Let $\mathcal{U}$ and $\mathcal{V}$ be normed spaces. A family of operators $R_\
 A regularisation operator alone is not enough; we need to know how to pick the parameter $\alpha$ based on the noise level $\delta$.
 
 \begin{definition}[Regularisation Method]
-A regularisation operator $R_\alpha$ together with a \textbf{parameter choice strategy} $\alpha_{\text{choice}}: (0, \delta_0) \times \mathcal{V} \to \mathbb{R}_{>0}$, denoted by $\alpha(\delta, f^\delta)$, forms a \textbf{regularisation method}.
+A regularisation operator $R_\alpha$ together with a \textbf{parameter choice strategy} $\alpha: (0, \delta_0) \times \mathcal{V} \to \mathbb{R}_{>0}$, denoted by $\alpha(\delta, f^\delta)$, forms a \textbf{regularisation method}.
 \end{definition}
 
 \vspace{1em}
@@ -197,7 +197,7 @@ When is a spectral operator $R_\alpha$ a valid regularisation operator?
 It must be continuous (bounded).
 
 \begin{proposition}[Boundedness]
-A spectral operator $R_\alpha$ is bounded if and only if the filter functions $g_\alpha(\sigma)$ are uniformly bounded for a fixed $\alpha$:
+A spectral operator $R_\alpha$ is bounded if and only if the filter functions $g_\alpha(\sigma)$ are uniformly bounded for a fixed $\alpha$, i.e.,
 \begin{align*}
     \sup_{\sigma > 0} |g_\alpha(\sigma)| \leq C_\alpha < \infty \, .
 \end{align*}
@@ -290,7 +290,7 @@ Yes. It is a valid regularisation operator.
 \end{frame}
 
 \begin{frame}
-\frametitle{Tikhonov: Operator Form}
+\frametitle{Tikhonov in Operator Form}
 One major advantage of Tikhonov regularisation is that it can be computed \textbf{without} the SVD.
 
 \begin{theorem}[Tikhonov Operator Form]
@@ -299,11 +299,29 @@ $$ R_\alpha^{\text{Tikh}} = (K^* K + \alpha I)^{-1} K^* $$
 \end{theorem}
 
 \pause
+\begin{theoremblock}{Proof Sketch}
+Recall $K^* K u_j = \sigma_j^2 u_j$. Thus, $(K^* K + \alpha I) u_j = (\sigma_j^2 + \alpha) u_j$.
+Applying the inverse operator to $K^* f = \sum \sigma_j \inner{f}{v_j} u_j$ yields \vspace{-0.33cm}
+\begin{align*}
+    (K^* K + \alpha I)^{-1}K^* f &= \sum_{j=1}^\infty \sigma_j \inner{f}{v_j} (\sigma_j^2 + \alpha)^{-1} u_j = \sum_{j=1}^\infty \frac{\sigma_j}{\sigma_j^2 + \alpha} \inner{f}{v_j} u_j = R_\alpha^{\text{Tikh}}f
+\end{align*}
+\end{theoremblock}
+\end{frame}
+
+\begin{frame}
+\frametitle{Tikhonov in Operator Form}
+One major advantage of Tikhonov regularisation is that it can be computed \textbf{without} the SVD.
+
+\begin{theorem}[Tikhonov Operator Form]
+The Tikhonov regularisation operator is equivalent to:
+$$ R_\alpha^{\text{Tikh}} = (K^* K + \alpha I)^{-1} K^* $$
+\end{theorem}
+
 \textbf{Intuition:}
 \begin{itemize}
     \item As $\alpha \to 0$, this approaches $(K^*K)^{-1}K^*$, the pseudo-inverse (Normal Equations).
     \item The term $\alpha I$ adds "mass" to the diagonal, making the matrix or operator invertible (shifting eigenvalues away from 0).
-    \item This is also known as \textbf{Ridge Regression} in statistics.
+    \item This is also known as Ridge Regression in statistics.
 \end{itemize}
 \end{frame}
 
