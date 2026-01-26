@@ -1,0 +1,316 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows} 
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+
+\setbeamercovered{transparent}
+
+% Configure listings for Python and C
+\lstset{
+  basicstyle=\ttfamily\scriptsize, % Smaller font for code to fit
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray!80!black},
+  stringstyle=\color{darkgreen},
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{stone},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  escapeinside={(*@}{@*)},
+  tabsize=4
+}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros based on content
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Ncal}{\mathcal{N}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dom}{dom}
+
+\title{From Hand-Crafted to Data-Driven}
+\subtitle{Part 3: Fenchel-Young Minimisation \& Learning Operators}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 30th January 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Introduction: Beyond Bilevel Optimisation}
+
+\begin{frame}{Recap: The Bilevel Challenge}
+    In the previous lecture, we formulated parameter learning as a bilevel optimisation problem:
+    \begin{align*}
+        \hat{\alpha} = \argmin_{\alpha} \frac{1}{s} \sum_{i=1}^s \|u_\alpha(f_i^\delta) - u_i^\dagger\|^2 \quad \text{s.t.} \quad u_\alpha(f_i^\delta) \in \argmin_u \{F(Ku, f_i^\delta) + \alpha J(u)\}
+    \end{align*}
+    
+    \pause
+    \begin{alertblock}{Computational Bottlenecks}
+        \begin{itemize}
+            \item \textbf{Implicit Differentiation:} Requires differentiating the solution map $u_\alpha$.
+            \item \textbf{Expensive:} Requires solving linear systems (Hessian inversion) at every training step.
+            \item \textbf{Non-Smoothness:} Difficult for TV or $\ell^1$ without smoothing.
+        \end{itemize}
+    \end{alertblock}
+    
+    \textbf{Question:} Can we learn parameters without differentiating through the argmin?
+\end{frame}
+
+\section{Fenchel-Young Minimisation}
+
+\begin{frame}{Optimality Conditions Revisited}
+    Recall Fermat's Rule for the variational problem $u_\alpha^\delta = \argmin_u E_\alpha^\delta(u)$ where $E_\alpha^\delta(u) = F(Ku, f^\delta) + \alpha J(u)$.
+    
+    The condition $0 \in \partial E_\alpha^\delta(u_\alpha^\delta)$ is equivalent to
+    $$ -\alpha^{-1} K^* \nabla_1 F(K u_\alpha^\delta, f^\delta) \in \partial J(u_\alpha^\delta) \, . $$
+    
+    \pause
+    Let $\lambda := \alpha^{-1}$. We can rewrite this using subgradients of $\Psi := \frac{1}{2}\|\cdot\|^2 + J$, i.e.,
+    $$ u_\alpha^\delta - \lambda K^* \nabla_1 F(K u_\alpha^\delta, f^\delta) \in \partial \Psi(u_\alpha^\delta) . $$
+    
+    \pause
+    Using convex conjugacy ($\Psi^\ast(p) = \sup \langle u, p \rangle - \Psi(u)$), this is equivalent to the \textbf{Fenchel-Young equality}
+    $$ \Psi(u_\alpha^\delta) + \Psi^*(p^\delta) = \langle u_\alpha^\delta, p^\delta \rangle \, , $$
+    where $p^\delta_\lambda := u_\alpha^\delta - \lambda K^* \nabla_1 F(K u_\alpha^\delta, f^\delta)$.
+\end{frame}
+
+\begin{frame}{The Fenchel-Young Loss Function}
+    \textbf{Idea:} If we have the ground truth $u^\dagger$, we want it to satisfy the optimality condition for some $\lambda$.
+    
+    Let $f = Ku^\dagger$ and define the vector $v^\delta := K^* \nabla_1 F(f, f^\delta)$ as well as $q^\delta(\lambda) := u^\dagger - \lambda v^\delta$. We then define the function $G(\lambda)$ with
+    
+    \begin{align}
+        G(\lambda) := \Psi(u^\dagger) + \Psi^*(q^\delta(\lambda)) - \langle u^\dagger, q^\delta(\lambda) \rangle \, . \label{eq:fy_loss}
+    \end{align}
+    
+    \pause
+    \begin{block}{Properties of $G(\lambda)$}
+        \begin{itemize}
+            \item By the Fenchel-Young inequality, $G(\lambda) \geq 0$ for all $\lambda$.
+            \item $G(\lambda) = 0$ if and only if $u^\dagger$ satisfies the optimality condition with parameter $\lambda$.
+            \item \textbf{Strategy:} Minimise $G(\lambda)$ to find the optimal parameter $\hat{\lambda}$.
+        \end{itemize}
+    \end{block}
+\end{frame}
+
+\begin{frame}{Differentiating the Loss}
+    Crucially, we do not need to differentiate a solution map. We only differentiate the conjugate function $\Psi^*$.
+    
+    \begin{lemma}[Derivative of $G$]
+        The derivative of $G(\lambda)$ is given by
+        \begin{align*}
+            G'(\lambda) &= \langle u^\dagger - \prox_J(u^\dagger - \lambda v^\delta), v^\delta \rangle_{\U} \, ,
+        \end{align*}
+        where $\prox_J$ is the proximal operator of $J$.
+    \end{lemma}
+    
+    \pause
+    \begin{itemize}
+        \item This gradient is \textbf{cheap to compute} (one proximal operator evaluation).
+        \item No need to solve the full inverse problem or invert a Hessian!
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Example: Quadratic Fidelity}
+    Suppose $F(f, f^\delta) = \frac{1}{2}\|f - f^\delta\|^2$.
+    Then $v^\delta = K^*(f - f^\delta)$.
+    
+    If noise is additive $f^\delta = f + n$, then $v^\delta = -K^* n$ and we obtain
+    
+    \begin{align*}
+        G'(\lambda) = \langle \prox_J(u^\dagger + \lambda K^* n) - u^\dagger, K^* n \rangle_{\U} \, .
+    \end{align*}
+    
+    \pause
+    \textbf{Projected Gradient Descent Update:}
+    $$ \lambda_{k+1} = \max\left(0, \lambda_k + \tau \langle \prox_J(u^\dagger - \lambda_k v^\delta) - u^\dagger, v^\delta \rangle \right) $$
+    
+    This is globally convergent to the optimal $\hat{\lambda}$.
+\end{frame}
+
+\begin{frame}{Connection to Bilevel Optimisation}
+    Is this related to the bilevel approach? Consider the \textbf{Denoising problem} ($K=I$) with quadratic fidelity.
+    We can rewrite the Fenchel-Young minimisation as:
+    
+    \begin{theoremblock}{Bilevel connection}
+        Minimising $G(\lambda)$ is equivalent to solving the bilevel problem
+        $$ \hat{\lambda} = \argmin_{\lambda \geq 0} \mathcal{L}_{\text{task}}(u^\dagger, u_\lambda^n) \, , $$
+        where the lower level problem is $u_\lambda^n = \prox_J(\lambda f^\delta + (1 - \lambda) u^\dagger)$, and the task loss is the specific \textbf{Bregman distance} $D_{\Psi}^{p}(x, y)$, i.e.
+        $$ \mathcal{L}_{\text{task}}(x, y) = D_{\Psi}^{p}(x, y) \, , $$
+        with $p = \lambda f^\delta + (1 - \lambda) u^\dagger$.
+    \end{theoremblock}
+    
+    This provides a rigorous link between "satisfying optimality conditions" and "minimising a loss".
+\end{frame}
+
+\section{Learning Operators in Regularisation}
+
+\begin{frame}{Moving Beyond Scalars}
+    We have learned:
+    \begin{enumerate}
+        \item Spectral filters $g(\sigma)$.
+        \item Scalar parameters $\alpha$ (or $\lambda$).
+    \end{enumerate}
+    
+    \pause
+    \textbf{Limitation:} The structure of the regularisation function(al) $J$ (e.g., gradient operator in TV, Wavelet basis in $\ell^1$) is still \textbf{hand-crafted}.
+    
+    \vspace{1em}
+    \textbf{Goal:} Learn the operators themselves from data.
+    \begin{itemize}
+        \item Learning the dictionary/basis $D$.
+        \item Learning the analysis operator / filter bank.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Dictionary Learning}
+    Assume the signal $u$ is sparse in a dictionary $D$, i.e., $u \approx D \xi$ with $\xi$ sparse.
+    
+    Instead of a fixed Wavelet basis, we learn $D$ from training data $\{u_i^\dagger\}_{i=1}^s$:
+    
+    \begin{align}
+        \min_{D, \{\xi_i\}} \sum_{i=1}^s \left( \frac{1}{2} \|u_i^\dagger - D \xi_i\|_{\U}^2 + \alpha \|\xi_i\|_1 \right) \label{eq:dict_learn}
+    \end{align}
+    
+    \pause
+    \begin{itemize}
+        \item \textbf{Method:} Alternating minimisation (Sparse Coding $\leftrightarrow$ Dictionary Update).
+        \item \textbf{Algorithm:} K-SVD \cite{aharon2006dictionary}.
+        \item \textbf{Extension:} \emph{Convolutional Dictionary Learning} (CDL) learns filters $\{k_j\}$ such that $u \approx \sum_j k_j * \xi_j$ \cite{papyan2017convolutional}.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Fields of Experts (FoE)}
+    Generalising TV, the \textbf{Fields of Experts} model \cite{roth2005fields} is defined as
+    $$ J_\theta(u) = \sum_{j=1}^N \rho_j(k_j * u) \, . $$
+    
+    \begin{itemize}
+        \item $k_j$: Learned convolution filters (detecting edges, textures).
+        \item $\rho_j$: Learned potential functions (non-linearities).
+    \end{itemize}
+    
+    \pause
+    \textbf{Learning:}
+    These parameters $\theta = \{k_j, \rho_j\}$ can be learned via the \textbf{bilevel framework} discussed in Lecture 2 (cf. )\cite{chen2014learning}).
+    
+    This bridges the gap between variational methods and Convolutional Neural Networks (CNNs).
+\end{frame}
+
+\section{Learning the Forward Operator}
+
+\begin{frame}{When $K$ is Unknown or Expensive}
+    Sometimes the forward operator $K$ itself is the bottleneck.
+    
+    \begin{block}{Scenario 1: Physics-Based Surrogates}
+        $K$ involves solving a complex PDE. We can approximate $K$ (or $K^{-1}$) using a neural network.
+        \begin{itemize}
+            \item \textbf{PINNs:} Physics-Informed Neural Networks incorporate PDE residuals into the loss \cite{raissi2019physics}.
+        \end{itemize}
+    \end{block}
+    
+    \pause
+    \begin{block}{Scenario 2: Blind Inverse Problems}
+        $K$ depends on unknown parameters $\phi$ (e.g., Blind Deconvolution).
+        We solve a joint minimisation problem:
+        $$ \min_{u, \phi} \{ F(K_\phi u, f^\delta) + \alpha J(u) + \beta \mathcal{P}(\phi) \} $$
+    \end{block}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Chapter Summary}
+    We have explored the transition \textbf{From Hand-Crafted to Data-Driven}:
+    
+    \begin{enumerate}
+        \item \textbf{Spectral Regularisation:} Learning optimal filters $g(\sigma)$ (generalisation of Wiener filter).
+        \item \textbf{Parameter Learning:} 
+        \begin{itemize}
+            \item Bilevel Optimisation (Hyperparameter tuning).
+            \item Fenchel-Young Minimisation (Optimality condition matching).
+        \end{itemize}
+        \item \textbf{Operator Learning:} Learning dictionaries ($D$) or analysis filters ($k_j$).
+    \end{enumerate}
+    
+    \pause
+    \vspace{1em}
+    \textbf{Outlook:}
+    This paves the way for the next chapter: fully \textbf{Neural Network-based Regularisers}, where we replace the entire variational machinery with learned architectures (e.g., Unrolling, U-Nets).
+\end{frame}
+
+% --- References Frame ---
+\begin{frame}[allowframebreaks]{References}
+    \footnotesize
+    \bibliographystyle{plain}
+    \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}

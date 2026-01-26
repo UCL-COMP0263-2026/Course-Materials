@@ -1,0 +1,395 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows} 
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+
+\setbeamercovered{transparent}
+
+% Configure listings for Python and C
+\lstset{
+  basicstyle=\ttfamily\scriptsize, % Smaller font for code to fit
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray!80!black},
+  stringstyle=\color{darkgreen},
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{stone},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  escapeinside={(*@}{@*)},
+  tabsize=4
+}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros based on content
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Ncal}{\mathcal{N}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+
+\title{From Hand-Crafted to Data-Driven}
+\subtitle{Part 1: Learned Spectral Regularisations}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 27th January 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Introduction: The Data-Driven Paradigm}
+
+\begin{frame}{Recap: Classical Variational Regularisation}
+    In previous lectures, we studied methods like Tikhonov, LASSO, and Total Variation.
+    \begin{align*}
+        u_\alpha^\delta \in \argmin_{u \in \U} \{ F(Ku, f^\delta) + \alpha J(u) \}
+    \end{align*}
+    \begin{itemize}
+        \item \textbf{Strengths:} Robust mathematical foundation; incorporates known priors (smoothness, sparsity).
+        \item \textbf{Limitation:} These priors are \emph{hand-crafted} and fixed.
+    \end{itemize}
+    \pause
+    \begin{exampleblock}{The Limitation of Model-Based Approaches}
+        Total Variation assumes images are piecewise constant. This is often too simplistic to capture intricate textures in medical scans or natural scenes.
+    \end{exampleblock}
+\end{frame}
+
+\begin{frame}{The Paradigm Shift}
+    \frametitle{The Paradigm Shift: Data-Driven Regularisation}
+    We move from fixed, model-based priors to \textbf{data-driven} regularisation.
+    
+    \vspace{1em}
+    \textbf{Core Idea:}
+    \begin{itemize}
+        \item Leverage training data to learn aspects of the regularisation model.
+        \item Tailor the regularisation to a specific problem domain.
+        \item Move beyond generic assumptions to learn highly expressive priors.
+    \end{itemize}
+    
+    \vspace{1em}
+    \pause
+    \textbf{Hierarchy of Complexity:}
+    \begin{enumerate}
+        \item \textbf{Learning Parameters:} Optimal spectral filters or optimal regularisation parameter $\alpha$ (today's topic).
+        \item \textbf{Learning Operators:} Learned dictionaries or filter banks.
+        \item \textbf{Learning End-to-End:} Neural Networks (future lectures).
+    \end{enumerate}
+\end{frame}
+
+\section{Learning Optimal Spectral Filters}
+
+\begin{frame}{Spectral Regularisation Recap}\label{sec:specreg}
+    Recall the definition of a spectral regularisation operator:
+    $$ R_\alpha f = \sum_{j=1}^\infty g_\alpha(\sigma_j) \ip{f}{v_j}_{\V} u_j $$
+    where $\{(\sigma_j, u_j, v_j)\}$ is the singular system of the compact operator $K$.
+    
+    \vspace{1em}
+    \textbf{Classical approach (e.g., Tikhonov):}
+    \begin{itemize}
+        \item Uses a predefined filter function, e.g., $g_\alpha(\sigma) = \frac{\sigma}{\sigma^2 + \alpha}$.
+        \item Relies on selecting a global scalar $\alpha$.
+    \end{itemize}
+    \pause
+    \textbf{Data-Driven approach:}
+    \begin{itemize}
+        \item Can we \emph{learn} the shape of $g(\sigma)$ optimal for a specific signal class?
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Problem Formulation}
+    \frametitle{Problem Formulation}
+    \textbf{Model:} $f^\delta = K u + \eta$, where $\eta$ is additive noise.
+    
+    \textbf{Goal:} Determine optimal filter coefficients $g_j := g(\sigma_j)$ for
+    $$ R(f^\delta; g) = \sum_{j=1}^\infty g_j \ip{f^\delta}{v_j}_{\V} u_j $$
+    by minimising the expected Mean Squared Error (MSE).
+
+    \pause
+    \begin{block}{Prob 1: Optimal Spectral Filter Learning}
+        Find the sequence $\overline{g} = \{ \overline{g}_j \}_{j \in \mathbb{N}}$ that solves
+        $$ \overline{g} = \argmin_{g} \E_{u,\eta} \left[ \| u - R(K u + \eta; g) \|_{\U}^2 \right] $$
+    \end{block}
+\end{frame}
+
+\begin{frame}{Error Decomposition}
+    Let $u_0$ be the projection of $u$ onto $\Ncal(K)$. Using the SVD expansion, we obtain
+    $$ R(f^\delta; g) = \sum_{j = 1}^\infty g_j (\sigma_j \ip{u}{u_j}_{\U} + \ip{\eta}{v_j}_{\V}) u_j \, . $$
+    
+    The total squared error is
+    \begin{align*}
+        \| u - R(f^\delta; g) \|_{\U}^2 &= \|u_0\|_{\U}^2 + \sum_{j=1}^\infty \left( (1 - \sigma_j g_j)\ip{u}{u_j}_{\U} - g_j \ip{\eta}{v_j}_{\V} \right)^2 \, .
+    \end{align*}
+    
+    \pause
+    Expanding the square yields:
+    \begin{itemize}
+        \item Squared signal approximation error: $(1 - \sigma_j g_j)^2 \ip{u}{u_j}_{\U}^2$
+        \item Squared noise propagation error: $g_j^2 \ip{\eta}{v_j}_{\V}^2$
+        \item A cross-term: $-2(1 - \sigma_j g_j)g_j \ip{u}{u_j}_{\U} \ip{\eta}{v_j}_{\V}$
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Statistical Assumptions}
+    To evaluate the expectation $\E_{u,\eta}$, we make standard assumptions.
+
+    \begin{block}{Assumption 1: Noise Properties}
+        \begin{enumerate}
+            \item Zero mean noise: $\E_\eta[\eta] = 0$.
+            \item Independence: The noise $\eta$ is statistically independent of the signal $u$.
+        \end{enumerate}
+    \end{block}
+    
+    \vspace{1em}
+    \textbf{Consequence:} The expected cross-term vanishes.
+    $$ \E_{u,\eta}[\ip{u}{u_j}_{\U} \ip{\eta}{v_j}_{\V}] = \E_u[\ip{u}{u_j}_{\U}] \E_\eta[\ip{\eta}{v_j}_{\V}] = 0 $$
+    \textit{(Independence allows factorisation; zero mean noise gives $\E_\eta[\ip{\eta}{v_j}_{\V}] = 0$.)}
+\end{frame}
+
+\begin{frame}{Signal and Noise Power}
+    We define the spectral power of the signal and the noise.
+    
+    \begin{block}{Signal and Noise Power}
+        We define the \emph{signal power} $\Pi_j$ and the \emph{noise power} $\Delta_j$ for the $j$-th component as:
+        $$ \Pi_j := \E_u[ \ip{u}{u_j}_{\U}^2 ] \qquad \text{and} \qquad \Delta_j := \E_\eta[ \ip{\eta}{v_j}_{\V}^2 ] $$
+    \end{block}
+    
+    The expected MSE simplifies to
+    $$ \E \left[ \| u - R(K u + \eta; g) \|^2 \right] = \E[\|u_0\|^2] + \sum_{j=1}^\infty \left( (1 - \sigma_j g_j)^2 \Pi_j + g_j^2 \Delta_j \right) \, . $$
+    This decouples into independent quadratic problems for each $g_j$.
+\end{frame}
+
+\begin{frame}{The Optimal Filter}
+    Minimising $L_j(g_j) = (1 - \sigma_j g_j)^2 \Pi_j + g_j^2 \Delta_j$ yields the following theorem.
+
+    \begin{theoremblock}{Optimal Learned Spectral Filter \cite{kabri_convergent_2024}}
+        Under the stated assumptions, the optimal spectral filter coefficients $\overline{g}_j$ are given by
+        $$ \overline{g}_j = \frac{\sigma_j \Pi_j}{\sigma_j^2 \Pi_j + \Delta_j} $$
+    \end{theoremblock}
+
+    \vspace{-0.15cm}
+    
+    \pause
+    \begin{proof}
+        Differentiation w.r.t $g_j$:
+        $$ -2\sigma_j (1 - \sigma_j g_j) \Pi_j + 2g_j \Delta_j = 0 $$
+        Rearranging gives $g_j (\sigma_j^2 \Pi_j + \Delta_j) = \sigma_j \Pi_j$.
+    \end{proof}
+\end{frame}
+
+\section{Interpretation and Connections}
+
+\begin{frame}{Connection to Tikhonov Regularisation}
+    If $\Pi_j > 0$, the optimal filter can be rewritten as:
+    $$ \overline{g}_j = \frac{\sigma_j}{\sigma_j^2 + (\Delta_j / \Pi_j)} $$
+    
+    Compare this to standard Tikhonov: $g_\alpha(\sigma) = \frac{\sigma}{\sigma^2 + \alpha}$.
+    
+    \pause
+    \begin{itemize}
+        \item The learned filter acts as Tikhonov with a \textbf{component-wise adaptive} parameter:
+        $$ \alpha_j = \frac{\Delta_j}{\Pi_j} = \frac{1}{\text{SNR}_j} $$
+        \item \textbf{High SNR ($\Pi_j \gg \Delta_j$):} $\alpha_j$ is small, $\overline{g}_j \approx 1/\sigma_j$ (inverse).
+        \item \textbf{Low SNR ($\Pi_j \ll \Delta_j$):} $\alpha_j$ is large, $\overline{g}_j \to 0$ (strong damping).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Connection to the Wiener Filter}
+    \begin{columns}
+        \begin{column}{0.6\textwidth}
+            The derived filter is the generalisation of the \textbf{Wiener Filter} \cite{wiener1949extrapolation} to arbitrary compact operators.
+            
+            In Deconvolution (Fourier domain), the Wiener filter reads
+            $$ W(\omega) = \frac{H^*(\omega) S_{uu}(\omega)}{|H(\omega)|^2 S_{uu}(\omega) + S_{\eta\eta}(\omega)} $$
+            
+            \begin{itemize}
+                \item $\omega$: frequency variable
+                \item $H(\omega)$: frequency response of operator (analogous to $\sigma_j$)
+                \item $S_{uu}(\omega)$, $S_{\eta\eta}(\omega)$: power spectral densities of signal and noise (analogous to $\Pi_j$, $\Delta_j$)
+            \end{itemize}
+        \end{column}
+        \begin{column}{0.35\textwidth}
+             \begin{center}
+             % Abstract visualization of signal vs noise separation
+             \begin{tikzpicture}
+                \node[circle, draw, fill=blue!20] (S) at (0,2) {Signal};
+                \node[circle, draw, fill=red!20] (N) at (2,2) {Noise};
+                \node[rectangle, draw, minimum width=2cm] (F) at (1,0.5) {Filter $\alpha_j$};
+                \draw[->] (S) -- (F);
+                \draw[->] (N) -- (F);
+                \node[text width=3cm, align=center] at (1,-1) {\footnotesize Weights based on statistical power};
+             \end{tikzpicture}
+             \end{center}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\section{Theoretical Guarantees}
+
+\begin{frame}{Is it a Regularisation Operator?}
+    For $R(\cdot; \overline{g}(\delta))$ to be a valid regularisation operator, it must be bounded (stable) for $\delta > 0$.
+    
+    \begin{block}{Assumption 2: SNR Decay}
+        There exists $c > 0$ and $j_0$ such that for high frequencies ($j \geq j_0$):
+        $$ \Delta_j(\delta) \geq c \, \delta^2 \, \Pi_j $$
+    \end{block}
+    \textit{Interpretation: The signal is smoother than the noise (signal power decays faster).}
+    
+    \pause
+    \begin{lemma}[Boundedness]
+        Under Assumption 2, $\sup_j |\overline{g}_j(\delta)| < \infty$. Thus, it is a bounded linear operator.
+    \end{lemma}
+\end{frame}
+
+\begin{frame}{Convergence Analysis}
+    Does the method converge to the truth as noise vanishes ($\delta \to 0$)?
+    
+    Consider the expected error for a specific signal $u$:
+    $e(u, \delta) := \E_\eta\left[ \| u - R(f^\delta; \overline{g}(\delta)) \|_{\U}^2 \right]$.
+    
+    \begin{theoremblock}{Convergence of Learned Spectral Regularisation}
+        Let $u \in \Ncal(K)^\perp$. As $\delta \to 0$ (implying $\Delta_j(\delta) \to 0$), we have
+        $$ \lim_{\delta \to 0} e(u, \delta) = 0 \, . $$
+        Moreover, the average expected error over the signal distribution also converges.
+    \end{theoremblock}
+    
+    This confirms the data-driven approach yields a mathematically valid regularisation method.
+\end{frame}
+
+\begin{frame}{The Oversmoothing Effect}
+    A subtle property of the optimal linear filter is \textbf{oversmoothing}.
+    
+    Compare reconstructed power $\tilde{\Pi}_j$ vs true power $\Pi_j$, i.e.,
+    $$ \tilde{\Pi}_j := \E_{u,\eta}\left[ \ip{R(f^\delta; \overline{g})}{u_j}^2 \right] \, . $$
+    
+    Substituting $\overline{g}_j$ yields
+    $$ \tilde{\Pi}_j = \left( \frac{1}{1 + \frac{\Delta_j}{\sigma_j^2 \Pi_j}} \right) \Pi_j < \Pi_j \, . $$
+    
+    \begin{alertblock}{Consequence}
+        Since the factor is $<1$ (for $\delta > 0$), reconstructions are statistically smoother (less energy at high frequencies) than the ground truth. The variance is underestimated.
+    \end{alertblock}
+\end{frame}
+
+\begin{frame}{A Note on Adversarial Robustness}
+    \textbf{Average vs. Worst Case}
+    \begin{itemize}
+        \item The learned filter minimises the \emph{expected} (average) error.
+        \item However, the Lipschitz constant ($\sup |g_j|$) can grow as $1/\delta$.
+    \end{itemize}
+    
+    \textbf{Adversarial Attacks:}
+    If $\overline{g}_j$ is very large for small $\sigma_j$ (aggressive inversion), the method becomes sensitive to noise patterns specifically aligned with those singular vectors.
+    
+    \emph{Trade-off:} Data-driven methods often outperform Tikhonov on average but may be less robust to worst-case (adversarial) perturbations \cite{kabri_convergent_2024}.
+\end{frame}
+
+\section{Practical Implementation}
+
+\begin{frame}{Empirical Risk Minimisation}
+    In practice, we don't know the true distributions $\Pi_j, \Delta_j$.
+    We use a training set $\{(u^i, f^i)\}_{i=1}^N$.
+    
+    \vspace{1em}
+    \textbf{Objective:} Minimise Empirical Risk (Sample MSE):
+    $$ \min_g \frac{1}{N} \sum_{i=1}^N \|u^i - R(f^i; g)\|_{\U}^2 $$
+    
+    \pause
+    \textbf{The Finite Sample Challenge:}
+    \begin{itemize}
+        \item Assumption of independence ($\E[\langle u, \eta\rangle] = 0$) doesn't hold exactly for finite samples.
+        \item We must account for empirical cross-correlation $\Gamma_j^N := \frac{1}{N} \sum_{i=1}^N \ip{u^i}{u_j}_{\U} \ip{\eta^i}{v_j}_{\V}$.
+    \end{itemize}
+    
+    $$ \overline{g}_j^N = \frac{\sigma_j \Pi_j^N + \Gamma_j^N}{\sigma_j^2 \Pi_j^N + \Delta_j^N + 2 \sigma_j \Gamma_j^N} $$
+\end{frame}
+
+\begin{frame}{Summary \& Next Steps}
+    \textbf{Summary:}
+    \begin{itemize}
+        \item We can replace fixed Tikhonov filters with learned filters.
+        \item The optimal filter is a component-wise adaptive Tikhonov (Wiener filter).
+        \item Theoretical guarantees (Stability, Convergence) hold under SNR decay assumptions.
+        \item Reconstructions tend to be oversmoothed.
+    \end{itemize}
+    
+    \vspace{1em}
+    \textbf{Coming Up:}
+    \begin{itemize}
+        \item \textbf{Lecture 2:} Learning scalar parameters via Bilevel Optimisation.
+        \item \textbf{Lecture 3:} Using Fenchel-Young functions to learn scalar parameters.
+    \end{itemize}
+\end{frame}
+
+% --- References Frame ---
+\begin{frame}[allowframebreaks]{References}
+    \footnotesize
+    \bibliographystyle{plain}
+    \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}

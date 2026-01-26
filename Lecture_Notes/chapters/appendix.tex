@@ -1,0 +1,35 @@
+\appendix
+
+\chapter{Appendix}
+
+\section{Learning optimal spectral filters}\label{sec:optspectral_appendix}
+
+\begin{thm}[Convergence of Learned Spectral Regularisation \cite{kabri_convergent_2024}]
+Let $u \in \mathcal{N}(K)^\perp$. Assume that if $\Pi_j=0$, then $\langle u, u_j \rangle_{\mathcal{U}}=0$. Then, as the noise level $\delta \to 0$ (implying $\Delta_j(\delta) \to 0$), the expected squared error converges to zero:
+\begin{align*}
+\lim_{\delta \to 0} e(u, \delta) = 0 \, .
+\end{align*}
+Moreover, the average expected error over the signal distribution also converges (to the unavoidable null space error):
+\begin{align*}
+\lim_{\delta \to 0} \left( \mathbb{E}_{u}[e(u, \delta)] - \mathbb{E}_u[\|u_0\|_{\mathcal{U}}^2] \right) = 0 \, .
+\end{align*}
+\end{thm}
+\begin{proof}
+We analyse $e(u, \delta)$. For $u \in \mathcal{N}(K)^\perp$, we have:
+\begin{align*}
+e(u, \delta) = \sum_{j: \Pi_j>0} \left[ (1 - \sigma_j \overline{g}_j(\delta))^2 \langle u, u_j \rangle_{\mathcal{U}}^2 + \overline{g}_j(\delta)^2 \Delta_j(\delta) \right] \, .
+\end{align*}
+We substitute the optimal filter expressions. Note that $1 - \sigma_j \overline{g}_j(\delta) = \frac{\Delta_j(\delta)}{\sigma_j^2 \Pi_j + \Delta_j(\delta)}$. The error becomes
+\begin{align*}
+e(u, \delta) = \sum_{j: \Pi_j>0} \left[ \left(\frac{\Delta_j(\delta)}{\sigma_j^2 \Pi_j + \Delta_j(\delta)}\right)^2 \langle u, u_j \rangle_{\mathcal{U}}^2 + \left(\frac{\sigma_j \Pi_j}{\sigma_j^2 \Pi_j + \Delta_j(\delta)}\right)^2 \Delta_j(\delta) \right] \, .
+\end{align*}
+We need to show this converges to zero. Let $\epsilon > 0$. Since $u \in \mathcal{U}$ and $\sum \Pi_j < \infty$, we choose $N$ such that $\sum_{j>N} (\langle u, u_j \rangle_{\mathcal{U}}^2 + \Pi_j) < \epsilon/2$.
+
+We split the sum at $N$. For the tail ($j>N$), we bound the terms. Note that $(1 - \sigma_j \overline{g}_j)^2 \leq 1$. Furthermore, $\overline{g}_j^2 \Delta_j \leq \Pi_j$ (this follows from the fact that the optimal error for component $j$ is $\frac{\Delta_j \Pi_j}{\sigma_j^2 \Pi_j + \Delta_j} \leq \Pi_j$, and the variance term is only part of this error). Thus, the tail sum is bounded by $\sum_{j>N} (\langle u, u_j \rangle_{\mathcal{U}}^2 + \Pi_j) < \epsilon/2$.
+
+For the head ($j \leq N$), we have a finite sum. Since $\Delta_j(\delta) \to 0$ as $\delta \to 0$, each term converges to zero. We can bound the head sum using $\Delta_j(\delta) \leq \delta^2$. For instance, the first term is bounded by
+\begin{align*}
+\left(\frac{\Delta_j(\delta)}{\sigma_j^2 \Pi_j}\right)^2 \langle u, u_j \rangle_{\mathcal{U}}^2 \leq \frac{\delta^4}{(\sigma_N^2 \min_{j\leq N, \Pi_j>0} \Pi_j)^2} \|u\|_{\mathcal{U}}^2 \, .
+\end{align*}
+The second term is bounded by $\Delta_j(\delta) \leq \delta^2$. By choosing $\delta$ sufficiently small, the finite sum can be made less than $\epsilon/2$. Thus, $e(u, \delta) < \epsilon$ for small enough $\delta$. The proof for the average expected error follows similarly.
+\end{proof}

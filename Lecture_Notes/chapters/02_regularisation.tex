@@ -18,7 +18,7 @@ This definition ensures stability (Third condition of Definition \ref{def:well-p
 
 A regularisation operator $R_\alpha$ together with a \emph{parameter choice strategy} $\alpha_{\text{choice}}: (0, \delta_0) \times \mathcal{V} \to A$, denoted by $\alpha(\delta, f^\delta)$, forms a \emph{regularisation method}.
 
-\subsection{Spectral regularisation}
+\subsection{Spectral regularisation}\label{sec:specreg}
 
 We now turn to a class of regularisation methods specifically designed for linear operators between Hilbert spaces, utilising the Singular Value Decomposition (SVD) introduced in Section \ref{sec:svd}. These methods are known as \emph{spectral regularisation methods}.
 
@@ -70,7 +70,7 @@ Here, the regularisation parameter $\alpha$ acts as a threshold. The regularised
 
 The filter function is bounded by $C_\alpha = 1/\alpha$, which means that according to Proposition \ref{prop:spectral_reg_bounded} the regularisation operator is bounded and therefore continuous. While simple, TSVD often introduces \href{https://en.wikipedia.org/wiki/Ringing_artifacts}{ringing artefacts} (\href{https://en.wikipedia.org/wiki/Gibbs_phenomenon}{Gibbs phenomenon}) due to the sharp cut-off in the spectral domain.
 
-\subsection{Tikhonov regularisation}
+\subsection{Tikhonov regularisation}\label{sec:tikhonov}
 
 Tikhonov regularisation\footnote{Named after the Russian mathematician Andrey Nikolayevich Tikhonov (1906-1993).} \cite{tikhonov1943stability,tikhonov1963solution,tikhonov1966stability}, arguably the most famous regularisation method, provides a smoother way to damp the influence of small singular values. It is also known as \href{https://en.wikipedia.org/wiki/Ridge_regression}{ridge regression} in statistics. The filter function for Tikhonov regularisation is
 \begin{align*}
@@ -317,7 +317,7 @@ Since the subdifferential of a convex function is a monotone operator, the symme
 \subsubsection{Characteristic Functions and Convex Conjugates}
 Two other concepts from convex analysis are essential for formulating constrained optimisation problems in a dual setting.
 
-\begin{defi}[Characteristic Function]\normalfont
+\begin{defi}[Characteristic Function]\label{def:charfunc}\normalfont
 Let $\mathcal{C} \subset \mathcal{U}$ be a non-empty set. The \emph{characteristic function} (or indicator function) of $\mathcal{C}$ is the functional $\chi_{\mathcal{C}} \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ defined as
 \[ \chi_{\mathcal{C}}(u) := \begin{cases} 0 & \text{if } u \in \mathcal{C} \, , \\ +\infty & \text{if } u \notin \mathcal{C} \, . \end{cases} \]
 If $\mathcal{C}$ is a convex set, then $\chi_{\mathcal{C}}$ is a convex functional. This function is instrumental in turning constrained optimisation problems into unconstrained ones. For example, $\min_{u \in \mathcal{C}} F(u)$ is equivalent to $\min_{u \in \mathcal{U}} \{ F(u) + \chi_{\mathcal{C}}(u) \}$.
@@ -330,7 +330,9 @@ Let $F \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper functiona
 \[ F^*(p) := \sup_{u \in \mathcal{U}} \{ \langle p, u \rangle - F(u) \} \, . \]
 \end{defi}
 The convex conjugate $F^*$ is always convex and lower semi-continuous. A fundamental result linking a functional and its conjugate is the \emph{Fenchel-Young inequality}:
-\[ F(u) + F^*(p) \ge \langle p, u \rangle \, . \]
+\begin{align}
+F(u) + F^*(p) \ge \langle p, u \rangle \, . \label{eq:fenchel-young}
+\end{align}
 Equality holds if and only if $p \in \partial F(u)$.
 
 \subsubsection{The Proximal Operator}
@@ -338,9 +340,9 @@ A fundamental tool in non-smooth optimisation is the \emph{proximal operator} (o
 
 \begin{defi}[Proximal Operator]\normalfont
 Let $J \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper, lower semi-continuous, convex functional, and let $\tau > 0$ be a parameter. The \emph{proximal operator} of $J$ with parameter $\tau$, denoted by $\operatorname{prox}_{\tau J} \colon \mathcal{U} \to \mathcal{U}$, is defined as
-\begin{align*}
-\operatorname{prox}_{\tau J}(x) := \argmin_{u \in \mathcal{U}} \left\{ \frac{1}{2}\|u - x\|^2 + \tau J(u) \right\} \, .
-\end{align*}
+\begin{align}
+\operatorname{prox}_{\tau J}(x) := \argmin_{u \in \mathcal{U}} \left\{ \frac{1}{2}\|u - x\|^2 + \tau J(u) \right\} \, .\label{eq:prox}
+\end{align}
 \end{defi}
 The proximal operator is well-defined and single-valued for convex $J$. It can be interpreted as a regularised projection: it seeks a point $u$ that minimizes $J$ while staying close to the input $x$.
 
@@ -481,8 +483,16 @@ where $\|u\|_1 = \sum_{i=1}^n |u_i|$. The $\ell^1$-norm is convex but not differ
 
 \begin{exm}[Total Variation Regularisation]\label{exm:rof_inv}\normalfont
 For image processing tasks like denoising or deblurring, a common prior is that images are piecewise constant or piecewise smooth, meaning they have sharp edges but are smooth elsewhere. The squared norm penalty of Tikhonov regularisation tends to blur these edges. The \emph{Total Variation (TV)} regularisation functional is designed to preserve them. For an image $u \in L^2(\Omega)$, it is defined as
-$$ \operatorname{TV}(u) = \sup \left\{ \int_\Omega u(x) \operatorname{div} \varphi(x) \, dx \mid \varphi \in C_c^1(\Omega, \mathbb{R}^2), \|\varphi(x)\|_2 \leq 1 \text{ for all } x \right\} \, . $$
+$$ \operatorname{TV}(u) = \sup \left\{ \int_\Omega u(x) \operatorname{div} \varphi(x) \, dx \mid \varphi \in C_c^1(\Omega, \mathbb{R}^2), \|\varphi(x)\|_\infty \leq 1 \text{ for all } x \right\} \, . $$
 For smooth functions, this corresponds to $\int_\Omega |\nabla u(x)|_2 dx$. The TV regularisation problem is
 $$ \min_{u} \left\{ \frac{1}{2}\|K u - f^\delta\|_{\mathcal{V}}^2 + \alpha \operatorname{TV}(u) \right\} \, . $$
 This approach has been incredibly successful in computational imaging for preserving important structural features like edges.
+\end{exm}
+
+\begin{exm}[Total Generalised Variation Regularisation]\label{exm:tgv_inv}\normalfont
+An extension of total variation regularisation that can handle both discontinouities and smooth transitions it the \emph{Total Generalised Variation (TGV)}. It is defined as
+$$ \operatorname{TGV}_\beta(u) = \sup \left\{ \left.\int_\Omega u(x) \operatorname{div}^2 \varphi(x) \, dx \right| \varphi \in C_c^\infty(\Omega, \operatorname{Sym}^2(\mathbb{R}^n)), \|\varphi(x)\|_\infty \leq \beta, \| \operatorname{div}(\varphi) \|_\infty \leq 1 \text{ for all } x \right\} \, . $$
+The TGV regularisation problem then reads
+$$ \min_{u} \left\{ \frac{1}{2}\|K u - f^\delta\|_{\mathcal{V}}^2 + \alpha \operatorname{TGV}_\beta(u) \right\} \, , $$
+with two regularisation parameters $\alpha > 0$ and $\beta > 0$, where $\beta$ influences the impact of the second order derivatives that control the smoothness between discontinuous regions.
 \end{exm}

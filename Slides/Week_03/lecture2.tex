@@ -1,0 +1,344 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows} 
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+
+\setbeamercovered{transparent}
+
+% Configure listings for Python and C
+\lstset{
+  basicstyle=\ttfamily\scriptsize, % Smaller font for code to fit
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray!80!black},
+  stringstyle=\color{darkgreen},
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{stone},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  escapeinside={(*@}{@*)},
+  tabsize=4
+}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros based on content
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Ncal}{\mathcal{N}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+
+\title{From Hand-Crafted to Data-Driven}
+\subtitle{Part 2: Learning Regularisation Parameters}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 27th January 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Introduction: The Challenge of Parameter Choice}
+
+\begin{frame}{Recap: Variational Regularisation}
+    We recall the variational framework for solving inverse problems $f^\delta = Ku + \eta$ \cite{benning2018modern}:
+    \begin{align*}
+        u_\alpha^\delta \in \argmin_{u \in \U} \{ F(K u, f^\delta) + \alpha J(u) \}
+    \end{align*}
+    \begin{itemize}
+        \item $F$: Data fidelity term (e.g., $\|Ku - f^\delta\|^2$).
+        \item $J$: Regularisation functional (e.g., Tikhonov, TV).
+        \item $\alpha$: \textbf{Regularisation parameter} controlling the trade-off.
+    \end{itemize}
+    \pause
+    \begin{alertblock}{The Critical Role of $\alpha$}
+        \begin{itemize}
+            \item \textbf{$\alpha$ too small:} Under-regularisation, noise amplification.
+            \item \textbf{$\alpha$ too large:} Over-regularisation, loss of detail (oversmoothing).
+        \end{itemize}
+    \end{alertblock}
+\end{frame}
+
+\begin{frame}{Inversion-Centric vs. Task-Centric}
+    \textbf{Classical Methods (Inversion-Centric):}
+    \begin{itemize}
+        \item \emph{Discrepancy Principle:} Choose $\alpha$ such that $\|Ku_\alpha - f^\delta\| \approx \delta$.
+        \item \emph{L-Curve, GCV:} Heuristics based on the trade-off curve.
+        \item \textbf{Limitation:} They do not use ground-truth knowledge; they aim for stability, not necessarily visual quality or task performance.
+    \end{itemize}
+
+    \pause
+    \textbf{Data-Driven Methods (Task-Centric):}
+    \begin{itemize}
+        \item We have access to training pairs $\{(u_i^\dagger, f_i^\delta)\}_{i=1}^s$.
+        \item \textbf{Goal:} Learn the $\alpha$ that minimises the reconstruction error (or another loss) on average over the dataset.
+    \end{itemize}
+\end{frame}
+
+\section{The Bilevel Optimisation Framework}
+
+\begin{frame}{Bilevel Optimisation: Definition}
+    We can formulate the learning of parameters as a \textbf{bilevel optimisation} problem (nested optimisation) \cite{kunisch2013bilevel, holler2018bilevel}. Let $J_\theta$ be a family of regularisation functions parametrised by $\theta$ (e.g., $\theta = \alpha$).
+
+    \begin{block}{The Framework}
+        \textbf{Lower-Level (Reconstruction):}
+        For a fixed $\theta$, the reconstruction $R_\theta(f^\delta)$ is defined by:
+        \begin{equation}
+             R_\theta(f^\delta) := \argmin_{u \in \U} \{ F(K u, f^\delta) + J_\theta(u) \} \label{eq:lower}
+        \end{equation}
+        
+        \textbf{Upper-Level (Training):}
+        Find optimal parameters $\hat{\theta}$ by minimising a task loss $\mathcal{L}_{\text{task}}$:
+        \begin{equation}
+            \hat{\theta} = \argmin_{\theta \in \Theta} \frac{1}{s} \sum_{i=1}^s \mathcal{L}_{\text{task}}(R_\theta(f_i^\delta), u_i^\dagger) \label{eq:upper}
+        \end{equation}
+    \end{block}
+\end{frame}
+
+\begin{frame}{Example: Tuning LASSO}
+    Consider sparse recovery with LASSO. We want to find the best scalar $\alpha$.
+    
+    \textbf{Lower-Level:}
+    $$ R_\alpha(f_i^\delta) = \argmin_{u \in \mathbb{R}^n} \left\{ \frac{1}{2}\|K u - f_i^\delta\|_2^2 + \alpha \|u\|_1 \right\} $$
+
+    \textbf{Upper-Level:}
+    $$ \hat{\alpha} = \argmin_{\alpha > 0} \frac{1}{s} \sum_{i=1}^s \|R_\alpha(f_i^\delta) - u_i^\dagger\|_2^2 $$
+    
+    \pause
+    \begin{itemize}
+        \item This formalises "parameter tuning" as an optimisation problem.
+        \item Strategies for differentiation include smoothing or specific derivation of the solution path \cite{mairal2012task}.
+    \end{itemize}
+\end{frame}
+
+\section{Solving the Bilevel Problem}
+
+\begin{frame}{Mathematical Challenges}
+    Solving \eqref{eq:upper} is difficult for two main reasons:
+    
+    \begin{enumerate}
+        \item \textbf{Non-Convexity:}
+        Even if the lower-level problem (reconstruction) is convex in $u$, the mapping $\alpha \mapsto u_\alpha$ is generally non-linear.
+        Consequently, the upper-level loss landscape is usually \emph{non-convex} w.r.t. $\alpha$ (cf. \cite[Fig. 4.1]{arridge2019solving}).
+        \begin{itemize}
+            \item \emph{Implication:} Gradient-based methods may settle in local minima.
+        \end{itemize}
+        
+        \pause
+        \item \textbf{Non-Differentiability:}
+        To use gradient descent on $\theta$, we need $\nabla_\theta \mathcal{L}$.
+        This requires differentiating the solution map $\theta \mapsto R_\theta(f^\delta)$.
+        \begin{itemize}
+            \item \emph{Implication:} If $J_\theta$ is non-smooth (e.g., TV, $\ell^1$), the map may not be differentiable.
+        \end{itemize}
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Gradient Computation: The Strategy}
+    Suppose we want to solve the upper level via Gradient Descent, i.e.,
+    $$ \theta_{k+1} = \theta_k - \eta \nabla_\theta \mathcal{L}(\theta_k) \, . $$
+    
+    Using the chain rule, the gradient for a single sample is:
+    $$ \frac{d\mathcal{L}}{d\theta} = \left\langle \frac{\partial \mathcal{L}_{\text{task}}}{\partial u}, \frac{du_\theta}{d\theta} \right\rangle $$
+    
+    \textbf{Key Question:} How do we compute the \emph{sensitivity} $\frac{du_\theta}{d\theta}$?
+    
+    \pause
+    We use the \textbf{Implicit Function Theorem (IFT)}.
+\end{frame}
+
+\begin{frame}{Implicit Function Theorem (IFT) Approach}
+    Assume the lower-level energy $E_\theta(u) = F(u) + J_\theta(u)$ is smooth and strictly convex.
+    The solution $u_\theta$ is characterised by the optimality condition:
+    $$ \nabla_u E_\theta(u_\theta) = 0 $$
+    
+    \pause
+    Differentiating this equation with respect to $\theta$ (chain rule) yields
+    $$ \underbrace{\nabla_{uu}^2 E_\theta(u_\theta)}_{\text{Hessian}} \frac{du_\theta}{d\theta} + \underbrace{\nabla_{\theta u}^2 E_\theta(u_\theta)}_{\text{Mixed Deriv.}} = 0 \, . $$
+    
+    \pause
+    Assuming the Hessian is invertible, we solve for the sensitivity:
+    \begin{equation}
+        \frac{du_\theta}{d\theta} = - \left( \nabla_{uu}^2 E_\theta(u_\theta) \right)^{-1} \nabla_{\theta u}^2 E_\theta(u_\theta)
+    \end{equation}
+\end{frame}
+
+\begin{frame}{Example: Tikhonov Regularisation}
+    Let $E_\alpha(u) = \frac{1}{2}\|Ku - f^\delta\|^2 + \frac{\alpha}{2}\|u\|^2$.
+    
+    \textbf{1. Optimality Condition ($\nabla_u E = 0$):}
+    $$ K^*(Ku - f^\delta) + \alpha u = 0 $$
+    
+    \textbf{2. Second Derivatives:}
+    \begin{align*}
+        \nabla_{uu}^2 E &= K^*K + \alpha I \quad \text{(Hessian, positive definite)} \\
+        \nabla_{\alpha u}^2 E &= u \quad \text{(Mixed partial derivatives)}
+    \end{align*}
+    
+    \pause
+    \textbf{3. Sensitivity:}
+    $$ \frac{du_\alpha}{d\alpha} = - (K^*K + \alpha I)^{-1} u_\alpha $$
+\end{frame}
+
+\begin{frame}{Example: Tikhonov Gradient}
+    The gradient of the upper-level loss $\mathcal{L}(\alpha) = \frac{1}{2}\|u_\alpha - u^\dagger\|^2$ is
+    
+    \begin{align*}
+        \frac{d\mathcal{L}}{d\alpha} &= \langle u_\alpha - u^\dagger, \frac{du_\alpha}{d\alpha} \rangle \\
+        &= \langle u_\alpha - u^\dagger, -(K^*K + \alpha I)^{-1} u_\alpha \rangle \\
+        &= \langle (K^*K + \alpha I)^{-1} (u^\dagger - u_\alpha), u_\alpha \rangle
+    \end{align*}
+    where $u_\alpha = (K^*K + \alpha I)^{-1} K^* f^\delta$.
+    
+    \begin{itemize}
+        \item This allows us to update $\alpha$ using gradient descent.
+        \item Requires solving \textbf{two linear systems} at each iteration: one for $u_\alpha$ (lower-level problem) and one for the adjoint state (gradient computation).
+    \end{itemize}
+\end{frame}
+
+\section{Handling Non-Smoothness}
+
+\begin{frame}{The Non-Smoothness Barrier}
+    The IFT relies on $\nabla_{uu}^2 E$ existing.
+    
+    However, non-smooth regularisation function(al)s like \textbf{Total Variation (TV)} or \textbf{$\ell^1$-norm} are \textbf{non-smooth}.
+    $$ J_{TV}(u) \approx \int |\nabla u| \quad \implies \quad \text{Not diff. at } \nabla u = 0 $$
+    
+    \pause
+    \textbf{Approaches:}
+    \begin{enumerate}
+        \item \textbf{Smoothing:} Approximate non-smooth $J$ with smooth $J_\gamma$.
+        \item \textbf{Iterative Differentiation:} Differentiate through the steps of a numerical solver (e.g., Unrolling).
+        \item \textbf{Derivative-Free:} Use grid search or Bayesian Optimisation (feasible only for few parameters).
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Smoothing: The Huber Loss}
+    To apply IFT to Total Variation, we replace $|z|_2$ with the \textbf{Huber function} (see \cite{delosreyes2016learning}):
+    
+    $$ H_\gamma(z) = \begin{cases} \frac{|z|_2^2}{2\gamma} & \text{if } |z|_2 \leq \gamma \\ |z|_2 - \frac{\gamma}{2} & \text{if } |z|_2 > \gamma \end{cases} $$
+    
+    \begin{itemize}
+        \item \textbf{Small $z$:} Quadratic (smooth).
+        \item \textbf{Large $z$:} Linear (edge-preserving).
+    \end{itemize}
+    
+    \pause
+    \begin{block}{Smoothed TV}
+        $$ J_\gamma(u) = \int_\Omega H_\gamma(\nabla u(x)) dx $$
+        This functional is twice continuously differentiable, allowing the calculation of the Hessian and application of bilevel optimisation.
+    \end{block}
+\end{frame}
+
+\begin{frame}{Applications of Parameter Learning}
+    Bilevel optimisation is flexible and has been used for:
+    
+    \begin{exampleblock}{Optimal TGV Weights}
+        Total Generalized Variation (TGV) has parameters $\alpha, \beta$ balancing first and second order derivatives.
+        $$ \min_{u,v} F(Ku, f1\delta) + \alpha \|\nabla u - v\|_1 + \beta \|\nabla v\|_1 $$
+        Optimal ratio $\alpha/\beta$ varies by image type; bilevel methods learn this effectively \cite{holler2021bilevel, bubba2023bilevel}.
+    \end{exampleblock}
+
+    \vspace{-0.1cm}
+    
+    \pause
+    \begin{exampleblock}{Spatially Varying Regularisation}
+        Instead of scalar $\alpha$, learn a function $\alpha(x)$ \cite{delosreyes2016learning}:\vspace{-0.1cm}
+        $$ \min_u \left\{ F(Ku, f) + \int_\Omega \alpha(x) |\nabla u(x)| dx \right\} $$
+        Adapts regularisation strength locally (e.g., less smoothing near edges).
+    \end{exampleblock}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Summary \& Next Steps}
+    \textbf{Summary:}
+    \begin{itemize}
+        \item \textbf{Task-Centric:} We can learn regularisation parameters to maximise performance on training data, rather than satisfying heuristic statistical criteria.
+        \item \textbf{Bilevel Optimisation:} The mathematical framework for this learning.
+        \item \textbf{Challenges:} The problem is non-convex and often non-smooth.
+        \item \textbf{Solutions:} We use the Implicit Function Theorem (on smoothed functionals) to compute gradients for optimisation.
+    \end{itemize}
+    
+    \vspace{1em}
+    \textbf{Coming Up on Friday (Lecture 3):}
+    \begin{itemize}
+        \item \textbf{Fenchel-Young Minimisation:} An alternative to bilevel optimisation that provides simpler gradients.
+        \item \textbf{Learning Operators:} Moving beyond parameters to learn dictionaries and operators.
+    \end{itemize}
+\end{frame}
+
+% --- References Frame ---
+\begin{frame}[allowframebreaks]{References}
+    \footnotesize
+    \bibliographystyle{plain}
+    \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}

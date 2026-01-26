@@ -1,0 +1,534 @@
+\chapter{From hand-crafted to data-driven: learning regularisations}
+
+The variational regularisation methods discussed in the previous chapter, such as Tikhonov, LASSO, and Total Variation regularisation, represent a cornerstone of inverse problems theory. Their strength lies in a robust mathematical foundation and the ability to incorporate well-understood prior knowledge, like smoothness or sparsity. However, a significant limitation is that these priors are \emph{hand-crafted} and fixed. A regularisation functional like Total Variation, for instance, assumes a universal model of piecewise constant images, which may be too simplistic to capture the intricate textures and complex structures present in specific classes of images, such as medical scans or natural scenes.
+
+This chapter marks a paradigm shift from these fixed, model-based priors to \emph{data-driven} regularisation. The central idea is to leverage the availability of training data to learn aspects of the regularisation model itself, tailoring it to a specific problem domain. This allows us to move beyond generic assumptions and learn priors that are highly expressive and optimised for the task at hand.
+
+We will explore this data-driven philosophy at several levels of complexity. We begin by retaining the structure of classical models but learning their optimal parameters from data. This includes learning the ideal shape of a spectral filter or learning the optimal regularisation parameter $\alpha$ for a given variational model. Subsequently, we will investigate more advanced methods where the operators within the regularisation functional, such as sparsifying dictionaries or filter banks, are learned. These approaches represent a powerful synthesis of classical theory and modern machine learning, paving the way for the highly effective neural network-based regularisers that will be discussed in the subsequent chapter.
+
+\section{Learning optimal spectral filters}
+
+In Section \ref{sec:specreg}, we introduced spectral regularisation methods (Definition \ref{def:spectral_reg_operator}), defined by
+\begin{align*}
+R_\alpha f = \sum_{j=1}^\infty g_\alpha(\sigma_j) \langle f, v_j \rangle_{\mathcal{V}} u_j \, .
+\end{align*}
+Classical methods, such as Tikhonov regularisation (Section \ref{sec:tikhonov}), employ predefined filter functions (e.g., $g_\alpha(\sigma) = \sigma/(\sigma^2 + \alpha)$) and rely on a strategy for selecting the regularisation parameter $\alpha$.
+
+While these methods guarantee stability and convergence under appropriate parameter choices, the predefined filter shape might not be optimal for a specific class of signals or noise distributions. If we have access to training data -- samples representing the underlying distribution of ground-truth signals $u$ and their corresponding noisy measurements $f^\delta$ -- we can adopt a supervised learning approach. Instead of imposing a fixed filter structure, we can aim to \emph{learn} the optimal filter function directly by minimising the expected reconstruction error over the data distribution.
+
+This section closely follows the analysis presented in \cite{kabri_convergent_2024}, focusing on the derivation of the optimal linear spectral filter and the theoretical guarantees that establish it as a convergent regularisation method.
+
+\subsection{Problem formulation and optimal filter derivation}
+
+We consider the standard linear inverse problem model $f^\delta = K u + \eta$, where $K$ is a compact linear operator between Hilbert spaces $\mathcal{U}$ and $\mathcal{V}$, and $\eta$ represents additive noise. We assume access to the singular system $\{ (\sigma_j, u_j, v_j) \}_{j \in \mathbb{N}}$ of $K$ (Definition \ref{def:svd_compact}).
+
+Our goal is to determine the optimal filter coefficients $g_j := g(\sigma_j)$ for the spectral regularisation operator
+\begin{align}
+R(f^\delta; g) = \sum_{j=1}^\infty g_j \langle f^\delta, v_j \rangle_{\mathcal{V}} u_j \, , \label{eq:data_driven_spectral_op}
+\end{align}
+by minimising the expected Mean Squared Error (MSE) over the joint distribution of the signal $u$ and the noise $\eta$.
+
+\begin{prob}[Optimal Spectral Filter Learning]\label{prob:optimal_filter}\normalfont
+Find the sequence of filter coefficients $\overline{g} = \{ \overline{g}_j \}_{j \in \mathbb{N}}$ that solves
+\begin{align}
+\overline{g} = \argmin_{g} \mathbb{E}_{u,\eta} \left[ \| u - R(K u + \eta; g) \|_{\mathcal{U}}^2 \right] \, . \label{eq:optimal_filter_objective}
+\end{align}
+\end{prob}
+
+To solve this, we first decompose the error using the SVD expansion. Let $u_0$ be the projection of $u$ onto the null space $\mathcal{N}(K)$. We can write $u = u_0 + \sum_j \langle u, u_j \rangle_{\mathcal{U}} u_j$. The reconstruction operator acts as
+\begin{align*}
+R(f^\delta; g) &= \sum_{j = 1}^\infty g_j \langle K u + \eta, v_j \rangle_{\mathcal{V}} u_j = \sum_{j = 1}^\infty g_j (\sigma_j \langle u, u_j \rangle_{\mathcal{U}} + \langle \eta, v_j \rangle_{\mathcal{V}}) u_j \, .
+\end{align*}
+The total squared error therefore is (using orthogonality of $\mathcal{N}(K)$ and $\mathcal{N}(K)^\perp$)
+\begin{align*}
+\| u - R(f^\delta; g) \|_{\mathcal{U}}^2 &= \|u_0\|_{\mathcal{U}}^2 + \left\| \sum_{j = 1}^\infty \langle u, u_j \rangle_{\mathcal{U}} u_j - R(f^\delta; g) \right\|_{\mathcal{U}}^2 \\
+&= \|u_0\|_{\mathcal{U}}^2 + \sum_{j=1}^\infty \left( (1 - \sigma_j g_j)\langle u, u_j \rangle_{\mathcal{U}} - g_j \langle \eta, v_j \rangle_{\mathcal{V}} \right)^2 \, .
+\end{align*}
+Expanding the square yields three terms: the squared signal approximation error, the squared noise propagation error, and a cross-term. To evaluate the expectation $\mathbb{E}_{u,\eta}$, we make standard statistical assumptions.
+
+\begin{assumption}\label{ass:noise_properties}\normalfont
+We assume that:
+\begin{enumerate}
+\item The noise $\eta$ has zero mean, i.e., $\mathbb{E}_\eta[\eta] = 0$.
+\item The noise $\eta$ is statistically independent of the signal $u$.
+\end{enumerate}
+\end{assumption}
+
+\noindent Under Assumption \ref{ass:noise_properties}, the expectation of the cross-term vanishes:
+\begin{align*}
+\mathbb{E}_{u,\eta}[\langle u, u_j \rangle_{\mathcal{U}} \langle \eta, v_j \rangle_{\mathcal{V}}] = \mathbb{E}_u[\langle u, u_j \rangle_{\mathcal{U}}] \mathbb{E}_\eta[\langle \eta, v_j \rangle_{\mathcal{V}}] = 0 \, .
+\end{align*}
+
+\noindent We define the expected power of the signal and the noise along each singular component.
+
+\begin{defi}[Signal and Noise Power]\normalfont
+We define the \emph{signal power} $\Pi_j$ and the \emph{noise power} $\Delta_j$ for the $j$-th component as
+\begin{align*}
+\Pi_j := \mathbb{E}_u[ \langle u, u_j \rangle_{\mathcal{U}}^2 ] \qquad \text{and} \qquad \Delta_j := \mathbb{E}_\eta[ \langle \eta, v_j \rangle_{\mathcal{V}}^2 ] \, .
+\end{align*}
+\end{defi}
+\noindent We assume $\mathbb{E}_u[\|u\|_{\mathcal{U}}^2] < \infty$, implying $\sum_{j = 1}^\infty \Pi_j < \infty$. The expected MSE \eqref{eq:optimal_filter_objective} simplifies to
+\begin{align*}
+\mathbb{E}_{u,\eta} \left[ \| u - R(f^\delta; g) \|_{\mathcal{U}}^2 \right] = \mathbb{E}_u[\|u_0\|_{\mathcal{U}}^2] + \sum_{j=1}^\infty \left( (1 - \sigma_j g_j)^2 \Pi_j + g_j^2 \Delta_j \right) \, .
+\end{align*}
+Since the term $\mathbb{E}_u[\|u_0\|_{\mathcal{U}}^2]$ is independent of $g$, the optimisation problem decouples into independent quadratic minimisation problems for each coefficient $g_j$.
+
+\begin{thm}[Optimal Learned Spectral Filter]\label{thm:optimal_filter}
+Under Assumption \ref{ass:noise_properties}, the optimal spectral filter coefficients $\overline{g}_j$ that minimise the expected MSE \eqref{eq:optimal_filter_objective} are given by
+\begin{align}
+\overline{g}_j = \frac{\sigma_j \Pi_j}{\sigma_j^2 \Pi_j + \Delta_j} \, . \label{eq:optimal_g}
+\end{align}
+\end{thm}
+\begin{proof}
+We minimise $L_j(g_j) = (1 - \sigma_j g_j)^2 \Pi_j + g_j^2 \Delta_j$ with respect to $g_j$. Taking the derivative and setting it to zero yields
+\begin{align*}
+\frac{d L_j}{d g_j} &= -2\sigma_j (1 - \sigma_j g_j) \Pi_j + 2g_j \Delta_j = 0 \, ,\\
+&\implies g_j (\sigma_j^2 \Pi_j + \Delta_j) = \sigma_j \Pi_j \, .
+\end{align*}
+Assuming $\sigma_j^2 \Pi_j + \Delta_j > 0$, we obtain the unique solution \eqref{eq:optimal_g}.
+\end{proof}
+
+\subsection{Interpretation and connections}
+
+The structure of the optimal filter provides significant insight into how data-driven learning balances signal recovery and noise suppression.
+
+\subsubsection{Connection to Tikhonov Regularisation}
+
+If we assume $\Pi_j > 0$, we can rewrite the optimal filter \eqref{eq:optimal_g} as
+\begin{align*}
+\overline{g}_j = \frac{\sigma_j}{\sigma_j^2 + (\Delta_j / \Pi_j)} \, .
+\end{align*}
+This expression is identical in form to the Tikhonov filter function $g_\alpha(\sigma) = \frac{\sigma}{\sigma^2 + \alpha}$ (Section \ref{sec:tikhonov}). However, instead of a single, global regularisation parameter $\alpha$, the learned filter employs a \emph{component-wise adaptive} regularisation parameter
+\begin{align*}
+\alpha_j = \frac{\Delta_j}{\Pi_j} \, .
+\end{align*}
+This ratio $\alpha_j$ is the inverse of the Signal-to-Noise Ratio (SNR) for the $j$-th component.
+\begin{itemize}
+\item \textbf{High SNR} ($\Pi_j \gg \Delta_j$): $\alpha_j$ is small. The filter $\overline{g}_j \approx 1/\sigma_j$, approaching the Moore-Penrose inverse.
+\item \textbf{Low SNR} ($\Pi_j \ll \Delta_j$): $\alpha_j$ is large. The filter $\overline{g}_j$ is small, strongly damping this noise-dominated component.
+\end{itemize}
+This adaptivity allows the filter to optimally tailor the regularisation strength based on the statistical reliability of the information in each spectral component.
+
+\subsubsection{Connection to the Wiener Filter}
+
+The derived optimal spectral filter is closely related to the classical \href{https://en.wikipedia.org/wiki/Wiener_filter}{\emph{Wiener filter}}, developed by Norbert Wiener \cite{wiener1949extrapolation}. The Wiener filter is the optimal linear estimator that minimises the MSE, typically derived in the Fourier domain for stationary processes.
+
+In the context of deconvolution, where $K$ is a convolution operator, the SVD basis corresponds to the Fourier basis. The Wiener filter in the frequency domain $W(\omega)$ is given by
+\begin{align*}
+W(\omega) = \frac{H^*(\omega) S_{uu}(\omega)}{|H(\omega)|^2 S_{uu}(\omega) + S_{\eta\eta}(\omega)} \, ,
+\end{align*}
+where $H(\omega)$ is the frequency response of the operator (analogous to $\sigma_j$), and $S_{uu}(\omega)$ and $S_{\eta\eta}(\omega)$ are the power spectral densities of the signal and noise (analogous to $\Pi_j$ and $\Delta_j$).
+
+The optimal spectral filter \eqref{eq:optimal_g} is precisely the generalisation of the Wiener filter to arbitrary compact linear operators, formulated in the basis defined by the operator's SVD.
+
+\subsection{Theoretical guarantees: Stability and convergence}
+
+We must verify that this data-driven approach constitutes a valid regularisation method according to Definitions \ref{def:reg_operator} and \ref{def:reg_method}. This involves verifying stability (boundedness) and convergence.
+
+We characterise the overall noise level by $\delta$, typically such that $\delta^2$ bounds the noise variance, e.g., $\delta^2 = \sup_j \Delta_j$. We denote the dependence of the noise power and the filter on the noise level as $\Delta_j(\delta)$ and $\overline{g}_j(\delta)$.
+
+\subsubsection{Stability (Regularisation Operator)}
+
+For a fixed $\delta > 0$, the operator $R(\cdot; \overline{g}(\delta))$ must be bounded (Proposition \ref{prop:spectral_reg_bounded}). This requires an assumption relating the decay of the signal power $\Pi_j$ to the noise power $\Delta_j(\delta)$. We expect the signal to be smoother than the noise, meaning $\Pi_j$ decays faster than $\Delta_j(\delta)$.
+
+\begin{assumption}[Signal-Noise Ratio Decay \cite{kabri_convergent_2024}]\label{ass:snr_decay}\normalfont
+There exists $c > 0$ and $j_0 \in \mathbb{N}$ such that for all $j \geq j_0$ and $\delta > 0$,
+\begin{align*}
+\Delta_j(\delta) \geq c \, \delta^2 \, \Pi_j \, .
+\end{align*}
+\end{assumption}
+This assumption is mild and is satisfied, for instance, by white noise ($\Delta_j(\delta) = \delta^2$), since $\Pi_j \to 0$.
+
+\begin{lem}[Boundedness of the Learned Operator \cite{kabri_convergent_2024}]\label{lem:learned_bounded}
+Let Assumption \ref{ass:snr_decay} be satisfied. Then the operator $R(\cdot; \overline{g}(\delta))$ defined by the optimal filter \eqref{eq:optimal_g} is a bounded linear operator for $\delta > 0$, and thus a regularisation operator.
+\end{lem}
+\begin{proof}
+We need to show $\sup_j |\overline{g}_j(\delta)| < \infty$. For $j < j_0$, we have $\overline{g}_j(\delta) \leq 1/\sigma_{j_0}$. For $j \geq j_0$ where $\Pi_j > 0$, we use the AM-GM inequality ($a^2+b^2 \geq 2ab$) and Assumption \ref{ass:snr_decay} to conclude
+\begin{align*}
+\overline{g}_j(\delta) = \frac{\sigma_j}{\sigma_j^2 + \Delta_j(\delta)/\Pi_j} \leq \frac{\sigma_j}{2\sqrt{\sigma_j^2 \Delta_j(\delta)/\Pi_j}} = \frac{1}{2\sqrt{\Delta_j(\delta)/\Pi_j}} \leq \frac{1}{2\sqrt{c\delta^2}} = \frac{1}{2\sqrt{c}\delta} \, .
+\end{align*}
+If $\Pi_j = 0$, then $\overline{g}_j(\delta) = 0$. Thus, the operator norm is bounded by $\max\{1/\sigma_{j_0}, 1/(2\sqrt{c}\delta)\}$.
+\end{proof}
+
+\subsubsection{Convergence}
+
+We now establish that the method is convergent as $\delta \to 0$. We analyse the convergence of the expected error for a specific signal $u$, i.e.,
+\begin{align*}
+e(u, \delta) := \mathbb{E}_\eta\left[ \| u - R(f^\delta; \overline{g}(\delta)) \|_{\mathcal{U}}^2 \right] \, .
+\end{align*}
+
+\begin{thm}[Convergence of Learned Spectral Regularisation \cite{kabri_convergent_2024}]\label{thm:learned_convergence}
+Let $u \in \mathcal{N}(K)^\perp$. Assume that if $\Pi_j=0$, then $\langle u, u_j \rangle_{\mathcal{U}}=0$. Then, as the noise level $\delta \to 0$ (implying $\Delta_j(\delta) \to 0$), the expected squared error converges to zero:
+\begin{align*}
+\lim_{\delta \to 0} e(u, \delta) = 0 \, .
+\end{align*}
+Moreover, the average expected error over the signal distribution also converges (to the unavoidable null space error):
+\begin{align*}
+\lim_{\delta \to 0} \left( \mathbb{E}_{u}[e(u, \delta)] - \mathbb{E}_u[\|u_0\|_{\mathcal{U}}^2] \right) = 0 \, .
+\end{align*}
+\end{thm}
+\begin{proof}
+The interested reader can find the proof in Appendix \ref{sec:optspectral_appendix}.
+\end{proof}
+
+\subsubsection{Remark on Adversarial Robustness}
+While the learned spectral filter minimises the expected error, it is important to note that this is an average-case guarantee. In modern machine learning, particularly with deep neural networks, there is significant concern about \emph{adversarial robustness}: the performance of a method under worst-case perturbations.
+
+For the learned filter $\overline{g}(\delta)$, the Lipschitz constant (operator norm) can grow as $1/\delta$ (see Lemma \ref{lem:learned_bounded}). If the filter coefficients $\overline{g}_j$ become very large for small singular values $\sigma_j$ (attempting to invert them aggressively), the method becomes sensitive to specific noise patterns aligned with these singular vectors. Recent studies \cite{kabri_convergent_2024} show that while data-driven methods often outperform classical methods like Tikhonov on average, they can be less robust to adversarial attacks where the noise is crafted to maximise the error. This highlights a fundamental trade-off between performance on the data distribution and worst-case stability.
+
+\subsection{The oversmoothing effect}
+
+An interesting property of this optimal linear method is that it tends to produce reconstructions that are, on average, smoother than the ground truth data used for training, provided $\delta > 0$.
+
+We can quantify this by comparing the expected power of the reconstructions, $\tilde{\Pi}_j$, with the original signal power $\Pi_j$. We define the expected power of the reconstructions as
+\begin{align*}
+\tilde{\Pi}_j := \mathbb{E}_{u,\eta}\left[ \langle R(f^\delta; \overline{g}), u_j \rangle_{\mathcal{U}}^2 \right] \, .
+\end{align*}
+Using the definitions and Assumption \ref{ass:noise_properties} we observe
+\begin{align*}
+\tilde{\Pi}_j &= \mathbb{E}_{u,\eta}\left[ \left( \overline{g}_j (\sigma_j \langle u, u_j \rangle_{\mathcal{U}} + \langle \eta, v_j \rangle_{\mathcal{V}}) \right)^2 \right] \\
+&= \overline{g}_j^2 (\sigma_j^2 \Pi_j + \Delta_j) \, .
+\end{align*}
+Substituting the definition of $\overline{g}_j$ from \eqref{eq:optimal_g} yields
+\begin{align*}
+\tilde{\Pi}_j &= \left( \frac{\sigma_j \Pi_j}{\sigma_j^2 \Pi_j + \Delta_j} \right)^2 (\sigma_j^2 \Pi_j + \Delta_j) = \frac{\sigma_j^2 \Pi_j^2}{\sigma_j^2 \Pi_j + \Delta_j} \\
+&= \left( \frac{1}{1 + \frac{\Delta_j}{\sigma_j^2 \Pi_j}} \right) \Pi_j \, .
+\end{align*}
+Since $\Delta_j > 0$ for $\delta > 0$, the factor multiplying $\Pi_j$ is strictly less than 1. Thus, $\tilde{\Pi}_j < \Pi_j$. Furthermore, under Assumption \ref{ass:snr_decay}, the ratio $\tilde{\Pi}_j/\Pi_j$ converges to zero as $j \to \infty$ (since $\sigma_j \to 0$), typically as fast as $\mathcal{O}(\sigma_j^2)$.
+
+This demonstrates that the reconstructions are statistically smoother (have less power at high frequencies) than the ground truth data. This \emph{oversmoothing} effect is inherent to the optimal linear MSE estimator: it balances noise suppression with signal fidelity, inevitably suppressing high-frequency signal components where the noise is relatively strong. As $\delta \to 0$, $\Delta_j \to 0$, and $\tilde{\Pi}_j \to \Pi_j$, restoring the correct smoothness profile in the limit.
+
+\subsection{Practical implementation: Empirical risk minimisation}
+
+In practice, we do not know the true expectations $\Pi_j$ and $\Delta_j$, but have a finite training dataset $\{(u^i, f^i)\}_{i=1}^N$. We therefore minimise the Empirical Risk (the sample average MSE) instead, i.e.,
+\begin{align*}
+\min_g \frac{1}{N} \sum_{i=1}^N \|u^i - R(f^i; g)\|_{\mathcal{U}}^2 \, .
+\end{align*}
+When solving this, the assumption that the cross-correlation between signal and noise vanishes (Assumption \ref{ass:noise_properties}) generally does not hold for the finite sample average. Hence, we must account for the empirical cross-correlation term $\Gamma_j^N$ defined as
+\begin{align*}
+\Gamma_j^N := \frac{1}{N} \sum_{i=1}^N \langle u^i, u_j \rangle_{\mathcal{U}} \langle \eta^i, v_j \rangle_{\mathcal{V}} \, .
+\end{align*}
+The optimal empirical filter coefficients $\overline{g}_j^N$ are given by \cite[Remark 3]{kabri_convergent_2024}
+\begin{align*}
+\overline{g}_j^N = \frac{\sigma_j \Pi_j^N + \Gamma_j^N}{\sigma_j^2 \Pi_j^N + \Delta_j^N + 2 \sigma_j \Gamma_j^N} \, ,
+\end{align*}
+where $\Pi_j^N$ and $\Delta_j^N$ are the empirical estimates of the power spectra. As $N \to \infty$, we expect $\Gamma_j^N \to 0$, and $\overline{g}_j^N \to \overline{g}_j$. However, the analysis of the finite sample case is more complex due to the presence of $\Gamma_j^N$.
+
+\section{Learning variational regularisation parameters}
+In Section \ref{sec:varreg}, we established the variational regularisation framework \eqref{eq:var_reg}, where the solution to an inverse problem is found by minimising a functional that balances a data fidelity term $F$ and a regularisation term $J$. This balance is controlled by the regularisation parameter $\alpha$. As a reminder, we have the formulation
+\begin{align*}
+u_\alpha^\delta \in \argmin_{u \in \mathcal{U}} \{ F(K u, f^\delta) + \alpha J(u) \} \, ,
+\end{align*}
+where the solution $u_\alpha^\delta$ clearly depends on the choice of the regularisation parameter $\alpha$. The selection of $\alpha$ is critical. An inappropriately small value leads to under-regularisation and noise amplification, while an excessively large value results in over-regularisation and potential loss of detail or introduction of artefacts characteristic of the regularisation functional.
+
+Classical parameter choice rules, such as the discrepancy principle or the L-curve criterion, are fundamentally \emph{inversion-centric}. They aim to ensure a stable inversion based on noise statistics or the structure of the trade-off curve, without access to the ground truth solution $u^\dagger$. However, these methods do not guarantee that the reconstruction is optimal for a specific application or quality metric.
+
+In recent years, the availability of training data has enabled a shift towards a supervised learning approach. Given a training dataset of $s$ pairs of ground-truth signals and their corresponding measurements, $\{(u_i^\dagger, f_i^\delta)\}_{i=1}^s$, we can learn the parameter $\alpha$ that yields reconstructions which are optimal with respect to a specific task, as measured by a loss function. This approach is explicitly \emph{task-centric}.
+
+\subsection{Bilevel optimisation}\label{sec:bilevel}
+The task-centric approach to learning optimal parameters can be naturally formulated as a \emph{bilevel optimisation} problem. This framework consists of two nested optimisation problems. The lower-level problem corresponds to the variational regularisation method as defined in \eqref{eq:var_reg} itself, defining the reconstruction operator for a given set of parameters. The upper-level problem minimises an expected loss (the task-specific quality metric) over the training data, thereby determining the optimal parameters.
+
+Let us generalise the variational formulation slightly. We consider a parameterised family of regularisation functionals $J_\theta$, where $\theta \in \Theta$ is a vector of parameters residing in an admissible set $\Theta$. This parameterisation can include the scalar weight $\alpha$, but also spatially varying weights, or parameters defining the structure of the regularisation function itself. The reconstruction operator $R_\theta$ is defined by the lower-level problem
+\begin{align}
+    R_\theta(f^\delta) := \argmin_{u \in \mathcal{U}} \{ F(K u, f^\delta) + J_\theta(u) \} \, . \label{eq:bilevel_lower}
+\end{align}
+Given a training dataset $\{(u_i^\dagger, f_i^\delta)\}_{i=1}^s$ and a loss function $\mathcal{L}_{\text{task}} \colon \mathcal{U} \times \mathcal{U} \to \mathbb{R}_{\geq 0}$ (e.g., the squared norm difference), the goal is to find the optimal parameters $\hat{\theta}$ by solving the upper-level problem
+\begin{align}
+    \hat{\theta} = \argmin_{\theta \in \Theta} \frac{1}{s} \sum_{i=1}^s \mathcal{L}_{\text{task}}(R_\theta(f_i^\delta), u_i^\dagger) \, . \label{eq:bilevel_upper}
+\end{align}
+The overall bilevel problem is the constrained optimisation problem defined by minimising \eqref{eq:bilevel_upper} subject to the constraint that $R_\theta(f_i^\delta)$ is a solution to \eqref{eq:bilevel_lower} for each $i$.
+
+This approach has gained significant attention in the inverse problems community for learning parameters in advanced regularisation models \cite{kunisch2013bilevel, delosreyes2016learning, holler2018bilevel, calatroni2022optimality}.
+
+\begin{exm}[Tuning LASSO via Bilevel Optimisation]\normalfont
+Let us consider the problem of sparse signal recovery using the LASSO formulation (cf. Example \ref{exm:lasso}). Suppose we have a training set of sparse signals $\{u_i^\dagger\}_{i=1}^s$ and corresponding measurements $\{f_i^\delta\}_{i=1}^s$. We want to find the optimal regularisation parameter $\alpha$ that minimises the reconstruction error.
+
+In the bilevel framework, the lower-level problem is the LASSO reconstruction for a given $\alpha$ (where $\theta = \alpha$), i.e.
+\begin{align*}
+    R_\alpha(f_i^\delta) = \argmin_{u \in \mathbb{R}^n} \left\{ \frac{1}{2}\|K u - f_i^\delta\|_2^2 + \alpha \|u\|_1 \right\} \, .
+\end{align*}
+The upper-level problem seeks the optimal $\alpha$ by minimising the empirical risk, typically using the squared $\ell^2$ error as the task loss $\mathcal{L}_{\text{task}}$, i.e.,
+\begin{align*}
+    \hat{\alpha} = \argmin_{\alpha > 0} \frac{1}{s} \sum_{i=1}^s \|R_\alpha(f_i^\delta) - u_i^\dagger\|_2^2 \, .
+\end{align*}
+Solving this requires navigating multiple challenges. For instance, to use gradient descent on the upper level, we must address the non-differentiability of the map $\alpha \mapsto R_\alpha(f_i^\delta)$ caused by the $\ell^1$-norm. Strategies include smoothing the $\ell^1$-norm (e.g., using the Huber loss) to ensure differentiability, or using techniques specifically designed to compute gradients or subgradients of the LASSO solution path with respect to $\alpha$ (cf. \cite{mairal2012task}).
+\end{exm}
+
+\subsubsection*{Challenges and Approaches}
+Solving the bilevel optimisation problem \eqref{eq:bilevel_upper}-\eqref{eq:bilevel_lower} presents several significant challenges.
+
+\begin{enumerate}
+    \item \textbf{Non-convexity}: Even if the lower-level problem \eqref{eq:bilevel_lower} is convex in $u$ for a fixed $\theta$, the upper-level problem \eqref{eq:bilevel_upper} is generally non-convex with respect to $\theta$. This means that standard gradient-based optimisation methods may only find local minima. In fact, even for the simple case of learning the single scalar parameter $\alpha$ for Total Variation denoising (i.e. Example \ref{exm:rof_inv} for $K$ being the identity operator), the upper-level loss landscape is known to be non-convex (cf. Figure 4.1 in \cite{arridge2019solving}).
+
+    \item \textbf{Non-differentiability}: To solve the upper-level problem using gradient-based methods, we require the gradient of the objective function with respect to $\theta$. This involves differentiating the solution operator $R_\theta$. This can easily be seen if we reformulate \eqref{eq:bilevel_upper} with the help of the constraint $u_\alpha = R_\alpha(f^\delta)$. For simplicity of notation, we stick to a single sample, $\mathcal{L}_{\text{task}} = \frac12 \| \cdot \|^2$ and scalar parameter $\theta = \alpha$, i.e.
+    \begin{align*}
+        \hat{\alpha} &= \argmin_{\alpha > 0} \frac12 \| u_\alpha - u^\dagger \|^2 \qquad \text{subject to} \qquad u_\alpha = R_\alpha(f^\delta) \, , 
+    \intertext{which using the definition of the characteristic function (Definition \ref{def:charfunc}) can be rewritten as}
+        \hat{\alpha} &= \argmin_{\alpha > 0} \left[\frac12 \| u_\alpha - u^\dagger \|^2 + \chi_{\{0\}}\left( R_\alpha(f^\delta) - u_\alpha \right) \right] \, ,\\
+    \intertext{which, using the convex conjugate of the indicator function, can be further rewritten as}
+        \hat{\alpha} &= \argmin_{\alpha > 0} \left[ \frac12 \| u_\alpha - u^\dagger \|^2 + \sup_{\mu} \left\langle \mu, R_\alpha(f^\delta) - u_\alpha\right\rangle  \right] \, .
+    \end{align*}
+    If we assume differentiability of $R_\alpha(f^\delta)$ with respect to $\alpha$ and compute the optimality system, we observe
+    \begin{align*}
+        u_{\hat\alpha} &= R_{\hat\alpha}(f^\delta) \, , \\
+        0 &= \left\langle \left( \left. \frac{d}{d\alpha} R_{\alpha}(f^\delta) \right|_{\alpha = \hat{\alpha}} \right), \hat{\mu} \right\rangle \, \\
+        u_{\hat\alpha} &= u^\dagger + \hat{\mu} \, .
+    \end{align*}
+    If we insert these equations into one another, we can effectively characterise the gradient of $\frac12 \| R_{\alpha}(f^\delta) - u^\dagger \|^2$ with respect to $\alpha$ that needs to be zero via 
+    \begin{align*}
+        0 = \left\langle \left( \left. \frac{d}{d\alpha} R_{\alpha}(f^\delta) \right|_{\alpha = \hat{\alpha}} \right), (R_{\hat\alpha}(f^\delta) - u^\dagger) \right\rangle \, .
+    \end{align*}
+    
+    To compute the required derivative $\frac{d}{d\alpha} R_{\alpha}(f^\delta)$, we often rely on the \href{https://en.wikipedia.org/wiki/Implicit_function_theorem}{\emph{Implicit Function Theorem (IFT)}}. Let $E_\alpha(u)$ denote the energy functional of the lower-level problem \eqref{eq:bilevel_lower}. If $E_\alpha(u)$ is sufficiently smooth with respect to both $u$ and $\alpha$, the solution $u_\alpha = R_\alpha(f^\delta)$ is characterised by the optimality condition
+    \begin{align*}
+        \nabla_u E_\alpha(u_\alpha) = 0 \, .
+    \end{align*}
+    The IFT states that if the Hessian $\nabla_{uu}^2 E_\alpha(u_\alpha)$ is invertible (which typically requires the lower-level problem to be strictly convex), then the solution map $\alpha \mapsto u_\alpha$ is locally continuously differentiable. We can find its derivative by differentiating the optimality condition with respect to $\alpha$ using the chain rule:
+    \begin{align*}
+        \frac{d}{d\alpha} \left( \nabla_u E_\alpha(u_\alpha) \right) = \nabla_{uu}^2 E_\alpha(u_\alpha) \frac{du_\alpha}{d\alpha} + \nabla_{\alpha u}^2 E_\alpha(u_\alpha) = 0 \, .
+    \end{align*}
+    Solving for the derivative (often called the sensitivity) yields
+    \begin{align}
+        \frac{du_\alpha}{d\alpha} = - \left( \nabla_{uu}^2 E_\alpha(u_\alpha) \right)^{-1} \nabla_{\alpha u}^2 E_\alpha(u_\alpha) \, . \label{eq:bilevel_sensitivity}
+    \end{align}
+
+    \begin{exm}[Gradient computation for Tikhonov Regularisation]\label{eq:bilevel_tikhonov}\normalfont
+    Let us consider Tikhonov regularisation (cf. \eqref{eq:tikh_variational}) where $F(K u, f^\delta) = \frac{1}{2}\|K u - f^\delta\|_{\mathcal{V}}^2$ and the regularisation function is $J_\alpha(u) = \frac{\alpha}{2}\|u\|_{\mathcal{U}}^2$. The energy is $E_\alpha(u) = \frac{1}{2}\|K u - f^\delta\|_{\mathcal{V}}^2 + \frac{\alpha}{2}\|u\|_{\mathcal{U}}^2$.
+
+    We compute the necessary derivatives. The gradient with respect to $u$ is
+    \begin{align*}
+        \nabla_u E_\alpha(u) = K^*(K u - f^\delta) + \alpha u \, .
+    \end{align*}
+    The Hessian with respect to $u$ is
+    \begin{align*}
+        \nabla_{uu}^2 E_\alpha(u) = K^* K + \alpha I \, .
+    \end{align*}
+    Since $\alpha > 0$, the Hessian is positive definite and thus invertible. The mixed partial derivative is
+    \begin{align*}
+        \nabla_{\alpha u}^2 E_\alpha(u) = \frac{\partial}{\partial \alpha} (\nabla_u E_\alpha(u)) = u \, .
+    \end{align*}
+    Applying the sensitivity formula \eqref{eq:bilevel_sensitivity} at the solution $u_\alpha$, we obtain
+    \begin{align*}
+        \frac{du_\alpha}{d\alpha} = - (K^* K + \alpha I)^{-1} u_\alpha \, .
+    \end{align*}
+    The gradient of the upper-level objective $\mathcal{L}(\alpha) = \frac{1}{2}\|u_\alpha - u^\dagger\|_{\mathcal{U}}^2$ is then computed using the chain rule as derived earlier:
+    \begin{align*}
+        \frac{d\mathcal{L}}{d\alpha} &= \langle u_\alpha - u^\dagger, \frac{du_\alpha}{d\alpha} \rangle_{\mathcal{U}} \\
+        &= \langle u^\dagger - u_\alpha, (K^* K + \alpha I)^{-1} u_\alpha \rangle_{\mathcal{U}} \, .
+    \end{align*}
+    \end{exm}
+    
+    Suppose the lower level problem \eqref{eq:bilevel_lower} is continuously differentiable with respect to $\theta$ (respectively $\alpha$) like in Example \ref{eq:bilevel_tikhonov}. Then we can aim to find $\hat\alpha$ that sets the gradient to zero by projected gradient descent, i.e.
+    \begin{align*}
+        \alpha^{k + 1} = \max\left(0, \alpha^k - \tau \left\langle \left( \left. \frac{d}{d\alpha} R_{\alpha}(f^\delta) \right|_{\alpha = \alpha^k} \right), (R_{\alpha^k}(f^\delta) - u^\dagger) \right\rangle \right)
+    \end{align*}
+    
+    However, many effective regularisation functions, such as the $\ell^1$-norm (Example \ref{exm:lasso}) or Total Variation (Example \ref{exm:rof_inv}), are non-smooth. This non-smoothness often means the solution map $\theta \mapsto R_\theta(f^\delta)$ is not continuously differentiable, or even only directionally differentiable.
+
+    \item \textbf{Computational Cost}: Evaluating the upper-level objective and its gradient requires solving the lower-level problem (i.e., performing the reconstruction) for every training sample at every iteration of the upper-level optimisation. For large-scale problems like 3D tomography, this is computationally very demanding.
+\end{enumerate}
+
+Several strategies have been developed to address these challenges, particularly the issue of non-differentiability.
+
+\paragraph{Smoothing the Lower Level} A common approach is to replace the non-smooth lower-level problem with a smooth approximation, ensuring the differentiability of the solution map. For example, the Total Variation functional can be approximated using the Huber loss, introducing a smoothing parameter $\gamma$.
+
+\begin{exm}[Huber Smoothing for Total Variation]\normalfont
+The standard isotropic Total Variation regularisation function (cf. Example \ref{exm:rof_inv}) is $J(u) = \int_\Omega |\nabla u(x)|_2 dx$. The non-smoothness arises from the Euclidean norm $|\cdot|_2$ at the origin. To ensure differentiability for the application of the IFT, we can replace the norm with the \textbf{Huber function} $H_\gamma \colon \mathbb{R}^d \to \mathbb{R}_{\geq 0}$, parametrised by a smoothing parameter $\gamma > 0$. For a vector $z \in \mathbb{R}^d$, it is defined as
+\begin{align*}
+H_\gamma(z) = \begin{cases} \frac{|z|_2^2}{2\gamma} & \text{if } |z|_2 \leq \gamma \, , \\ |z|_2 - \frac{\gamma}{2} & \text{if } |z|_2 > \gamma \, . \end{cases}
+\end{align*}
+This function is continuously differentiable. It approximates the norm $|z|_2$, behaving quadratically near the origin (smoothing the singularity) while remaining linear far from the origin (maintaining the edge-preserving behaviour of TV). The Huber-smoothed Total Variation regularisation function is then
+\begin{align*}
+J_\gamma(u) = \int_\Omega H_\gamma(\nabla u(x)) dx \, .
+\end{align*}
+When used in the lower-level problem, this smoothing ensures that the energy functional is continuously differentiable with respect to $u$.
+\end{exm}
+
+By ensuring the regularised lower-level problem is smooth and strictly convex, the implicit function theorem can be applied to guarantee the existence and differentiability of the solution map $R_\theta$. The gradient of the upper-level objective can then be computed via the adjoint method (also known as backpropagation in the context of neural networks). Theoretical analysis often involves studying the behaviour as the smoothing parameter vanishes ($\gamma \to 0$), ensuring the solutions of the smoothed problem converge to the solutions of the original non-smooth problem \cite{delosreyes2016learning}.
+
+\paragraph{Iterative Differentiation} An alternative strategy is to use iterative methods for the lower-level problem and differentiate through the iterations. If the iterations are truncated early, this leads to approaches related to unrolling (which will be discussed later in the course). This can alleviate the computational burden by avoiding the need to solve the lower-level problem to high accuracy.
+
+\paragraph{Derivative-Free Optimisation} For problems with a small number of parameters, derivative-free methods such as Bayesian optimisation or grid search can be employed for the upper-level problem, bypassing the need for gradients (cf. \cite{ehrhardt2023inexact}).
+
+\subsubsection*{Examples of Parameter Learning}
+Bilevel optimisation has been successfully applied to learn various types of parameters in imaging models.
+
+\begin{exm}[Optimal weights for higher-order regularisation]\normalfont
+Recall the Total Generalized Variation (TGV) model from Example \ref{exm:rof_inv}. The second-order TGV involves two parameters, $\alpha$ and $\beta$, balancing the first-order derivative and the symmetrised second-order derivative. The optimal ratio between $\alpha$ and $\beta$ depends heavily on the image content and the noise level. Bilevel optimisation can be used to learn the optimal pair $(\alpha, \beta)$ for a specific class of images, significantly improving reconstruction quality compared to hand-tuned parameters \cite{holler2021bilevel, bubba2023bilevel}.
+\end{exm}
+
+\begin{exm}[Spatially varying regularisation]\normalfont
+In many applications, the assumption that a single regularisation parameter $\alpha$ is optimal across the entire domain is too restrictive. Bilevel optimisation allows for learning a spatially dependent parameter function $\alpha(x)$. The lower-level problem becomes
+$$ \argmin_{u} \left\{ F(K u, f^\delta) + \int_\Omega \alpha(x) |\nabla u(x)| dx \right\} \, . $$
+By parameterising $\alpha(x)$ (e.g., using a basis expansion) and learning these parameters via the bilevel approach, the regularisation can be adapted locally to the expected image structure \cite{delosreyes2016learning}.
+\end{exm}
+
+\subsection{Fenchel-Young minimisation}
+An alternative approach to bilevel optimisation is to look at the optimality condition of the variational regularisation \eqref{eq:var_reg}. Remember that based on Fermat's Rule \ref{thm:fermat}, we can characterise the minimiser $u_\alpha^\delta$ of \eqref{eq:var_reg} also via $0 \in \partial E_\alpha^\delta(u_\alpha^\delta)$, where $E_\alpha^\delta$ denotes the energy
+\begin{align*}
+    E_\alpha^\delta(u) := F(K u, f^\delta) + \alpha J(u) \, .
+\end{align*}
+Given Definition \ref{defi:subdiff} and the definition of $E_\alpha^\delta$, we can characterise $0 \in \partial E_\alpha^\delta(u_\alpha^\delta)$ equivalently via
+\begin{align}
+    -\alpha^{-1} K^* \nabla_1 F(K u_\alpha^\delta, f^\delta) \in \partial J(u_\alpha^\delta) \, ,\label{eq:var_reg_opt}
+\end{align}
+where $\nabla_1$ denotes the partial derivative with respect to the first argument. Suppose we define $\lambda := \alpha^{-1}$, then we can reformulate \eqref{eq:var_reg_opt} to
+\begin{align*}
+    u_\alpha^\delta - \lambda K^* \nabla_1 F(K u_\alpha^\delta, f^\delta) \in \partial \left( \frac12 \| \cdot \|^2 + J\right)(u_\alpha^\delta) \, ,
+\end{align*}
+where we used that $\partial \frac12 \| \cdot \|^2(u) = \{ u \}$. Following the definition of the convex conjugate and subgradients, we can equivalently characterise this condition via the Fenchel-Young equality \eqref{eq:fenchel-young}, i.e.
+\begin{align*}
+    \Psi(u_\alpha^\delta) + \Psi^*(u_\alpha^\delta - \lambda K^* \nabla_1 F(K u_\alpha^\delta, f^\delta)) = \langle u_\alpha^\delta, u_\alpha^\delta - \lambda K^* \nabla_1 F(K u_\alpha^\delta, f^\delta) \rangle \, ,
+\end{align*}
+for $\Psi := \frac12 \| \cdot \|^2 + J$.
+
+Now assume that we have a single pair of training data $(u^\dagger, f^\delta)$, then we use $f = K u^\dagger$, define $v^\delta := K^* \nabla_1 F(f, f^\delta)$ and take the previous Fenchel-Young inequality as motivation to define the function
+\begin{align}
+    G(\lambda) := \Psi(u^\dagger) + \Psi^*(u^\dagger - \lambda v^\delta) - \langle u^\dagger, u^\dagger - \lambda v^\delta \rangle \, .\label{eq:fenchel-young-reg-param}
+\end{align}
+The rationale behind \eqref{eq:fenchel-young-reg-param} is that for $G(\lambda) = 0$, the ideal solution $u^\dagger$ would be a solution of \eqref{eq:var_reg}, since it would satisfy the corresponding optimality condition \eqref{eq:var_reg_opt}. However, it is not necessarily realistic to assume that a $\lambda$ exists for which $G(\lambda) = 0$. Nevertheless, we know that $G(\lambda) \geq 0$ for all $\lambda$ because of the Fenchel-Young inequality. This means that we could minimise $G$ with respect to $\lambda$ in order to find a $\hat{\lambda}$ such that $u$ is approximately a solution of \eqref{eq:var_reg}. Luckily, minimisation of $G$ is surprisingly easy, as we can characterise the derivative of $G$ with the following lemma.
+\begin{lem}\normalfont
+    The derivative of the function $G$ as defined in \eqref{eq:fenchel-young-reg-param} is
+    \begin{align}
+        G^\prime(\lambda) &= \langle u^\dagger - \operatorname{prox}_J(u^\dagger - \lambda v^\delta), v^\delta \rangle_{\mathcal{U}} \, , \label{eq:fenchel-young-loss-derivative}\\
+        &= \left\langle K \left(u^\dagger - \operatorname{prox}_J\left(u^\dagger - \lambda K^* \nabla_1 F(f, f^\delta)\right)\right), \nabla_1 F(f, f^\delta) \right\rangle_{\mathcal{V}} \, ,\nonumber
+    \end{align}
+    where $\operatorname{prox}_J$ denotes the \emph{proximal operator} or \emph{proximal map} of $J$, as defined in \eqref{eq:prox}.
+    
+\begin{proof}
+    The proof will be given in the appendix.
+\end{proof}
+\end{lem}
+\begin{exm}[Quadratic data fidelity]
+    Suppose we have $F(f, f^\delta) = \frac12 \| f - f^\delta \|^2$, which implies $(\nabla_1 F)(f, f^\delta) = f - f^\delta$. The interesting aspect is that for additive Gau\ss ian noise, i.e. $f^\delta = f + n$, where $n \in \mathbb{R}^m$ is an instance of a normal distributed random variable with mean zero and standard deviation $\sigma = \delta/\sqrt{m}$, we simply have $v^\delta = - K^* n$, which implies
+    \begin{align*}
+        G^\prime(\lambda) = \langle \operatorname{prox}_J(u^\dagger + \lambda K^* n ) - u^\dagger, K^* n \rangle_{\mathcal{U}} \, ,
+    \end{align*}
+    which means that for $G^\prime(\lambda)$ to be zero, $\lambda$ has to be chosen such that the difference between $K \operatorname{prox}_J(u^\dagger + \lambda K^* n )$ and $f$ is orthogonal to the random variable $n$.
+\end{exm}
+\noindent Note that we can optimise for $\hat{\lambda}$ for example with projected gradient descent, i.e.
+\begin{align*}
+    \lambda_{k + 1} = \max\left(0, \lambda_k + \tau \left\langle \operatorname{prox}_J(u^\dagger - \lambda_k v^\delta) - u^\dagger, v^\delta \right\rangle_{\mathcal{U}} \right) \, ,
+\end{align*}
+which is globally convergent for any starting value $\lambda_0 > 0$ and step-size choice $\tau < 1/\| v^\delta \|^2$, which means that this iteration is guaranteed to converge to $\hat{\lambda}$ that minimises $G$ as defined in \eqref{eq:fenchel-young-reg-param}.
+
+\subsubsection*{Connection to bilevel optimisation}
+Let us consider the denoising case with quadratic data-fidelity, i.e. $K = I$ and $F(f, f^\delta) = \frac12 \| f - f^\delta \|^2$. In this case, \eqref{eq:var_reg} reads
+\begin{align*}
+    u_\alpha^\delta = \argmin_{u} \left\{ \frac{1}{2} \| u - f^\delta \|^2 + \alpha J(u) \right\} \, ,
+\end{align*}
+which is simply $\operatorname{prox}_{\alpha J}(f^\delta)$. Alternatively we can multiply the entire optimisation problem with $\lambda = \alpha^{-1} > 0$ to obtain
+\begin{align}
+    u_\lambda^\delta = \argmin_{u} \left\{ \frac{\lambda}{2} \| u - f^\delta \|^2 + J(u) \right\} \, .\label{eq:denoising}
+\end{align}
+Assuming that we have one pair $(u, f^\delta)$, we could use \eqref{eq:denoising} as lower-level problem \eqref{eq:bilevel_lower}, and a corresponding upper-level problem \eqref{eq:bilevel_upper} of the form 
+\begin{align*}
+    \hat{\lambda} = \argmin_{\lambda \geq 0} \frac12 \| u^\dagger - u_\lambda \|^2 \, ,
+\end{align*}
+where $\mathcal{L}_{\text{task}}(x, y) = \frac12 \| x - y \|^2$. 
+
+Alternatively, we could look at the problem of optimising the scale of the noise. Suppose we again have an instance $n$ of a $m$-dimensional normal distributed random variable with mean zero and standard deviation $\sigma = \delta / \sqrt{m}$, and we look at the problem
+\begin{align*}
+    \hat{\lambda} = \argmin_{\lambda \geq 0} \mathcal{L}_{\text{task}}(u^\dagger, \operatorname{prox}_J(u^\dagger + \lambda n)) \, ,
+\end{align*}
+which is a bilevel optimisation problem of the form
+\begin{align}
+    \hat{\lambda} &= \argmin_{\lambda \geq 0} \mathcal{L}_{\text{task}}(u^\dagger, u_\lambda^n) \, ,\label{eq:scale_upper}
+\intertext{with lower level problem}
+    u_\lambda^n &= \operatorname{prox}_J(u^\dagger + \lambda n) = \argmin_{u} \left\{ \frac12 \| u - (u^\dagger + \lambda n) \|^2 + J(u) \right\} \, .\label{eq:scale_lower}
+\end{align}
+Note that if we define $f^\delta = u^\dagger + n$, we can write the lower-level problem also as 
+\begin{align*}
+    u_\lambda^n = \operatorname{prox}_J(\lambda f^\delta + (1 - \lambda) u^\dagger) = \argmin_{u} \left\{ \frac12 \| u - (\lambda f^\delta + (1 - \lambda) u^\dagger) \|^2 + J(u) \right\} \, .
+\end{align*}
+Next, we choose $\mathcal{L}_{\text{task}}$ as
+\begin{align*}
+    \mathcal{L}_{\text{task}}(x, y) = \frac12 \| x - y \|^2 + D_J^p(x, y) \, ,
+\end{align*}
+where $D_J^p(x, y)$ denotes the generalised Bregman distance with respect to $J$ for arguments $x$, $y$ and subgradient $p \in \partial J(y)$. Inserting the arguments $x = u^\dagger$, $y = u_\lambda^n$ and choosing $p = u^\dagger + \lambda n - u_\lambda^n \in \partial J(u_\lambda^n)$, respectively $p = \lambda f^\delta + (1 - \lambda) u^\dagger - u_\lambda^n \in \partial J(u_\lambda^n)$, yields
+\begin{align*}
+    \mathcal{L}_{\text{task}}(u^\dagger, u_\lambda^n) &= \frac12 \| u^\dagger - u_\lambda^n \|^2 + D_J^{\lambda f^\delta + (1 - \lambda) u^\dagger - u_\lambda^n}(u^\dagger, u_\lambda^n) \, ,
+\intertext{which we can rewrite to}
+    \mathcal{L}_{\text{task}}(u^\dagger, u_\lambda^n) &= D_{\frac12 \| \cdot \|^2 + J}^{\lambda f^\delta + (1 - \lambda) u^\dagger}(u^\dagger, u_\lambda^n) = D_{\Psi}^{\lambda f^\delta + (1 - \lambda) u^\dagger}(u^\dagger, u_\lambda^n) \, ,
+\intertext{for $\Psi := \frac12 \| \cdot \|^2 + J$. Using the definition of the Bregman distance, we observe}
+    \mathcal{L}_{\text{task}}(u^\dagger, u_\lambda^n) &= \Psi(u^\dagger) - \Psi(u_\lambda^n) - \langle \lambda f^\delta + (1 - \lambda) u^\dagger, u^\dagger - u_\lambda^n \rangle_{\mathcal{U}} \, , \\
+    &= \Psi(u^\dagger) + \Psi^*(\lambda f^\delta + (1 - \lambda) u^\dagger) - \langle u^\dagger, \lambda f^\delta + (1 - \lambda) u^\dagger \rangle_{\mathcal{U}} \, ,
+\end{align*}
+where we have used $\Psi(z) + \Psi^*(q) = \langle z, q\rangle$ if and only if $q \in \partial \Psi(z)$, which is exactly equal to $G(\lambda)$ Hence, we have shown that $\mathcal{L}_{\text{task}}(u^\dagger, u_\lambda^n) = G(\lambda)$, so minimising $G$ with respect to $\lambda$ is equivalent to solving the bilevel optimisation problem \eqref{eq:scale_upper}-\eqref{eq:scale_lower}.
+
+\subsubsection*{Extension for quadratic data fidelity}
+The reformulation of the optimality condition that leads to the proximal map is elegant but not unique. As a case study, we can explore the alternative path for the common quadratic data fidelity term, $F(f, f^\delta) = \frac{1}{2}\|f - f^\delta\|^2$.
+
+As we have shown, the original optimality condition can be algebraically manipulated by adding $\gamma K^* K u_\alpha^\delta$ (for a fixed constant $\gamma > 0$) to both sides. This leads to a Fenchel-Young formulation based on $\Psi(u) := \frac{\gamma}{2} \| K u \|^2 + J(u)$. For the quadratic fidelity, the term $v^\delta$ simplifies to $v^\delta = K^*(f - f^\delta)$. This allows us to express the derivative of the corresponding loss function $G(\lambda)$ in a more concrete form.
+
+\begin{lem}\normalfont
+    For the choice $\Psi(u) = \frac{\gamma}{2} \| K u \|^2 + J(u)$ and with $F(f, f^\delta) = \frac{1}{2}\|f - f^\delta\|^2$, the derivative of the Fenchel-Young loss function $G(\lambda)$ is
+    \begin{align}
+        G^\prime(\lambda) &= \langle u^\dagger - u^*, K^*(f - f^\delta) \rangle_{\mathcal{U}} \, , \label{eq:fenchel-young-loss-derivative-quad}
+    \intertext{where $u^*$ is the unique solution to the variational problem}
+        u^* &:= \argmin_u \left\{ \frac{\gamma}{2} \left\| K u - \frac{(\gamma-\lambda)f + \lambda f^\delta}{\gamma} \right\|^2 + J(u) \right\} \, .\label{eq:variational_subproblem_quad}
+    \end{align}
+\end{lem}
+\begin{proof}[Derivation of the subproblem]
+The solution $u^*$ is defined as the minimiser in \eqref{eq:variational_subproblem_quad}. Substituting $v^\delta = K^*(f - f^\delta)$ and $K u^\dagger=f$, the objective becomes
+\begin{align*}
+    &\frac{\gamma}{2} \| K u \|^2 + J(u) - \langle \gamma K^* K u^\dagger - \lambda K^*(f - f^\delta), u \rangle_{\mathcal{U}} \\
+    &= J(u) + \frac{\gamma}{2} \| K u \|^2 - \gamma\langle f, K u \rangle_{\mathcal{V}} + \lambda\langle f - f^\delta, K u \rangle_{\mathcal{V}} \\
+    &= J(u) + \frac{\gamma}{2} \| K u \|^2 - \langle (\gamma-\lambda)f + \lambda f^\delta, K u \rangle_{\mathcal{V}} \, .
+\end{align*}
+By completing the square on the terms involving $K u$ and dropping constant terms, this minimisation is equivalent to \eqref{eq:variational_subproblem_quad}.
+\end{proof}
+
+\begin{rem}[Interpretation]\normalfont
+This simplification is insightful. It shows that computing the derivative requires solving a standard variational regularisation problem \eqref{eq:variational_subproblem_quad}. The ``data'' term in this subproblem is a linear interpolation between the clean data $f$ and the noisy data $f^\delta$, with the interpolation factor depending on the ratio $\lambda/\gamma$. While this is more intuitive than the original formulation with the abstract linear term, it still requires an iterative solver, unlike the simple proximal map in the very first formulation.
+\end{rem}
+
+The connection to bilevel optimisation is similar as for the case $\gamma = 1$ and $K = I$, just that the task objective becomes 
+\begin{align*}
+    \mathcal{L}_{\text{task}}(x, y) = \frac{\gamma}{2} \| K(x - y) \|^2 + D_J^p(x, y) \, ,
+\end{align*}
+and that the lower level problem \eqref{eq:bilevel_lower} is computed via \eqref{eq:variational_subproblem_quad}.
+
+\section{Learning operators in variational regularisation methods}
+
+The bilevel optimisation framework discussed in the Section \ref{sec:bilevel} provides a powerful mechanism for tuning parameters within a predefined model structure. However, the success of variational regularisation still fundamentally relies on the appropriateness of the chosen functionals $F$ and $J$. While learning scalar or spatially varying weights adapts the model, the underlying operators (e.g., the gradient in TV, or the wavelet transform in $\ell^1$ regularisation) remain fixed and hand-crafted.
+
+A more profound integration of learning into the variational framework involves learning the operators themselves. This moves beyond parameter tuning and aims to discover the optimal structures and transformations that best represent the data distribution for the task of inversion. This applies both to the operators defining the regularisation function $J$ and the forward operator $K$.
+
+\subsection{Learning Operators in the Regularisation Function}
+We can leverage data to learn the transformations that best capture the prior information about the solution $u$.
+
+\subsubsection{Learning Sparsifying Transforms and Dictionaries}
+In sparse regularisation, the solution $u$ is assumed to have a sparse representation $\xi$ in some transform domain or dictionary $D$. Classical approaches use predefined dictionaries like wavelets or the DCT. \emph{Dictionary learning} aims to learn the optimal dictionary $D$ directly from data $\{u_i^\dagger\}_{i=1}^s$. This is typically formulated as an optimisation problem over both the dictionary and the sparse codes $\{\xi_i\}_{i=1}^s$, i.e.
+\begin{align}
+    \min_{D, \{\xi_i\}} \sum_{i=1}^s \left( \frac{1}{2} \|u_i^\dagger - \text{Synth}_{D}(\xi_i)\|_{\mathcal{U}}^2 + \alpha \|\xi_i\|_p \right) \, , \label{eq:dictionary_learning}
+\end{align}
+where $\text{Synth}_{D}$ is the synthesis operator, and $p=1$ is typically used. The problem \eqref{eq:dictionary_learning} is non-convex and is usually solved using alternating minimisation (sparse coding followed by dictionary update). A prominent algorithm is K-SVD \cite{aharon2006dictionary}.
+
+In imaging, dictionary learning is often applied to patches. To capture global structure and shift-invariance, \emph{Convolutional Dictionary Learning} (CDL) assumes the dictionary is composed of convolution kernels (filters) $\{k_j\}$, and the reconstruction is a sum of convolutions with sparse feature maps $\{(\xi_i)_j\}$, i.e., $\text{Synth}_{D}(\xi_i) = \sum_j k_j * (\xi_i)_j$. CDL provides shift-invariant representations and has links to the structures learned by Convolutional Neural Networks (CNNs) \cite{papyan2017convolutional}.
+
+\subsubsection{Learning Filters and Non-linearities: Fields of Experts}
+Another approach stemming from Markov Random Field (MRF) models is the Fields of Experts (FoE) model \cite{roth2005fields}. The regularisation function is parametrised as a sum of potential functions applied to the responses of a set of linear filters, i.e.
+\begin{align}
+    J_\theta(u) = \sum_{j=1}^N \rho_j(k_j * u) \, . \label{eq:foe_model}
+\end{align}
+Here, $\theta$ encompasses the filters $\{k_j\}$ and parameters for the potential functions $\{\rho_j\}$ (which promote sparsity of filter responses). Learning these parameters $\theta$ can be cast within the bilevel optimisation framework in Section \ref{sec:bilevel}. This allows for the joint learning of optimal filters (operators) and their associated non-linearities adapted to the data \cite{chen2014learning}. Note that the potential functions $\{\rho_j\}$ usually have to be parametrised in some form (e.g. as radial basis functions).
+
+\subsection{Learning the Forward Operator}
+Data-driven methods can also be employed when the forward operator $K$ is unknown, inaccurately modelled, or computationally too expensive to evaluate.
+
+\subsubsection{Learning Physics-Based Models (Surrogates)}
+If the forward model is governed by complex physics (e.g., Partial Differential Equations (PDEs)), neural networks can be used to approximate the solution operators. This provides a data-driven surrogate for the forward operator $K$. For instance, Physics-Informed Neural Networks (PINNs) incorporate the PDE residuals into the loss function during training, ensuring the network respects the known physical laws while learning from data \cite{raissi2019physics}. This learned operator can then be used as the forward model in the inverse problem solver.
+
+\subsubsection{Operator Correction and Joint Reconstruction}
+If an approximate analytical model $K_{\text{approx}}$ is available, but systematic errors remain (e.g., due to unknown calibration parameters $\phi$), we can aim to learn the correction or jointly estimate the parameters $\phi$ along with the solution $u$. This leads to a joint optimisation problem:
+\begin{align*}
+    \min_{u \in \mathcal{U}, \phi \in \Phi} \{ F(K_\phi u, f^\delta) + \alpha J(u) + \beta \mathcal{P}(\phi) \} \, ,
+\end{align*}
+where $K_\phi$ is the parametrised forward operator and $\mathcal{P}(\phi)$ is a penalty on the operator parameters.
+
+\begin{exm}[Blind Deconvolution]\normalfont
+In blind deconvolution, the forward operator $K$ is a convolution with an unknown kernel (the parameter $\phi$). The problem is to jointly estimate the image $u$ and the kernel $\phi$ from the blurry data $f^\delta$.
+\end{exm}
+
+This joint problem is typically non-convex and solved using alternating minimisation. By integrating the learning of operators—both in the regularisation function and the forward model—into the variational framework, we can address inverse problems with complex or uncertain structures, potentially leading to more accurate and robust reconstructions.
