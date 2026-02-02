@@ -1,0 +1,355 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows, fit, patterns} 
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{uclblue}{cmyk}{1,0.24,0,0.64}
+\definecolor{uclred}{cmyk}{0,1,0.62,0}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\supremum}{sup}
+
+\title{Neural Network-Based Regularisers}
+\subtitle{Part 3: Synthesis Models and Unsupervised Learning}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 5th February 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Introduction: Beyond Analysis}
+
+\begin{frame}{Recap: The Analysis Perspective}
+    In the previous lecture (Block 2), we focused on \textbf{Analysis Regularisation} (specifically NETT).
+    
+    $$ u_\alpha^\delta = \argmin_{u \in \mathcal{U}} \left\{ \frac12 \| Ku - f^\delta \|^2 + \alpha J_\Theta(u) \right\} $$
+    
+    \begin{itemize}
+        \item We optimise directly in the image space $\mathcal{U}$.
+        \item The regulariser $J_\Theta(u)$ (the "Critic") penalises deviations from the manifold of clean images.
+        \item Requires paired training data $(u^\dagger, h)$ for the auto-encoder.
+    \end{itemize}
+    
+    \pause
+    \textbf{Today's Questions:}
+    \begin{enumerate}
+        \item Can we define solutions by \emph{generating} them rather than penalising them? (Synthesis)
+        \item What if we don't have paired training data? (Unsupervised / Adversarial)
+    \end{enumerate}
+\end{frame}
+
+\section{Deep Synthesis Regularisation (DESYRE)}
+
+\begin{frame}{Analysis vs. Synthesis}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Analysis Approach (NETT)}
+        \begin{itemize}
+            \item Variable: Image $u \in \mathcal{U}$.
+            \item Prior: $J_\Theta(u)$ is large for artefacts.
+            \item "Find an image $u$ that fits data and has low penalty."
+        \end{itemize}
+        
+        \column{0.5\textwidth}
+        \textbf{Synthesis Approach (DESYRE)}
+        \begin{itemize}
+            \item Variable: Latent code $\gamma \in \mathcal{Z}$.
+            \item Prior: Generator $D_\theta(\gamma)$.
+            \item "Find a code $\gamma$ such that the generated image $D_\theta(\gamma)$ fits the data."
+        \end{itemize}
+    \end{columns}
+    
+    \vspace{1em}
+    \centering
+    \begin{tikzpicture}[scale=0.8, transform shape]
+        % Analysis
+        \node (u) at (0,0) [circle, draw] {$u$};
+        \node (J) at (2,0) [rectangle, draw] {$J_\Theta$};
+        \draw[->] (u) -- (J);
+        \node[below=0.2cm of u] {Analysis};
+        
+        % Synthesis
+        \node (z) at (5,0) [circle, draw, fill=stone] {$\gamma$};
+        \node (D) at (7,0) [rectangle, draw, fill=uclblue!20] {$D_\theta$};
+        \node (ugen) at (9,0) [circle, draw] {$u$};
+        \draw[->] (z) -- (D);
+        \draw[->] (D) -- (ugen);
+        \node[below=0.2cm of z] {Synthesis};
+    \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{DESYRE: Formulation}
+    \cite{Obmann_2021} introduced \textbf{DEep SYnthesis REgularisation (DESYRE)}.
+    
+    We assume the solution lies on (or near) a manifold parameterised by a deep generative decoder $D_\theta: \mathcal{Z} \to \mathcal{U}$.
+    
+    \begin{theoremblock}{The DESYRE Functional}
+        We search for the optimal latent code $\gamma^*$:
+        \begin{align}
+            \gamma^* = \argmin_{\gamma \in \mathcal{Z}} \left\{ \frac12 \| K D_\theta(\gamma) - f^\delta \|_\mathcal{V}^2 + \alpha \mathcal{S}(\gamma) \right\}
+        \end{align}
+        The final reconstruction is $u^* = D_\theta(\gamma^*)$.
+    \end{theoremblock}
+    
+    \begin{itemize}
+        \item $D_\theta$: Pre-trained generative network (e.g., Decoder of a VAE or GAN generator).
+        \item $\mathcal{S}(\gamma)$: Convex penalty on coefficients (e.g., $\|\gamma\|_1$ for sparsity or $\|\gamma\|_2^2$).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Comparison: NETT vs. DESYRE}
+    \begin{table}
+        \centering
+        \renewcommand{\arraystretch}{1.5}
+        \begin{tabular}{l|c|c}
+             & \textbf{NETT (Analysis)} & \textbf{DESYRE (Synthesis)} \\
+             \hline
+             \textbf{Optimisation Variable} & High-dim image $u \in \mathcal{U}$ & Low-dim code $\gamma \in \mathcal{Z}$ \\
+             \textbf{Location of Non-linearity} & In the Penalty $J_\Theta(u)$ & In the Operator $D_\theta(\gamma)$ \\
+             \textbf{Convexity} & Non-convex Regulariser & Non-convex Data Fidelity \\
+             \textbf{Algorithm} & Gradient Descent on $u$ & Proximal Gradient on $\gamma$ \\
+        \end{tabular}
+    \end{table}
+    
+    \textbf{Note:} In DESYRE, even if the forward operator $K$ is linear, the composition $K \circ D_\theta$ is non-linear, making the data fidelity term non-convex.
+\end{frame}
+
+\section{Adversarial Regularisers (AR)}
+
+\begin{frame}{The Unsupervised Challenge}
+    So far, NETT and DESYRE typically assume we can train auto-encoders or generators on clean data.
+    
+    \textbf{Scenario:} What if we only have two unpaired datasets?
+    \begin{enumerate}
+        \item $\mathbb{P}_r$: A set of high-quality clean images (e.g., from a database).
+        \item $\mathbb{P}_{rec}$: A set of noisy/artifact-laden reconstructions (e.g., $K^\dagger f^\delta$ from current patients).
+    \end{enumerate}
+    
+    We do not have pairs $(u_i, f_i)$. We cannot train a supervised U-Net.
+    
+    \pause
+    \textbf{Solution:} \textbf{Adversarial Regularisers} \cite{lunz2018adversarial}.
+    Use a Critic to learn the difference between "Good" and "Bad" distributions.
+\end{frame}
+
+\begin{frame}{Learning the Critic via Wasserstein Distance}
+    We want a regulariser $J_\Theta$ that is:
+    \begin{itemize}
+        \item \textbf{Low} for images in $\mathbb{P}_r$.
+        \item \textbf{High} for images in $\mathbb{P}_{rec}$.
+    \end{itemize}
+    
+    We use the \textbf{Wasserstein-1 Distance} (Earth Mover's Distance). By Kantorovich-Rubinstein duality:
+    
+    \begin{align}
+        W_1(\mathbb{P}_r, \mathbb{P}_{rec}) = \sup_{J \in \text{Lip}_1(\mathcal{U})} \left( \mathbb{E}_{u \sim \mathbb{P}_{rec}} [J(u)] - \mathbb{E}_{u \sim \mathbb{P}_r} [J(u)] \right)
+    \end{align}
+    
+    The function $J$ that achieves this supremum is the optimal \textbf{Critic}.
+\end{frame}
+
+\begin{frame}{Visualising the Critic}
+    \centering
+    \begin{tikzpicture}[scale=0.9]
+        % Axes
+        \draw[->] (-1,0) -- (8,0) node[right] {Image Space $\mathcal{U}$};
+        \draw[->] (0,-1) -- (0,4) node[above] {Value of $J_\Theta(u)$};
+        
+        % Distribution Pr (Real)
+        \draw[green!60!black, thick, fill=green!10] (1,0) .. controls (1.5,1) and (2.5,1) .. (3,0) -- cycle;
+        \node at (2, -0.5) {$\mathbb{P}_r$ (Clean)};
+        
+        % Distribution Prec (Reconstructed)
+        \draw[red!60!black, thick, fill=red!10] (5,0) .. controls (5.5,1) and (6.5,1) .. (7,0) -- cycle;
+        \node at (6, -0.5) {$\mathbb{P}_{rec}$ (Noisy)};
+        
+        % The Critic Function
+        \draw[blue, ultra thick] plot [smooth] coordinates { (0,0) (2,0.5) (4,2) (6,3.5) (8,3.8) };
+        \node[blue, right] at (8,3.8) {$J_\Theta(u)$};
+        
+        % Explanation
+        \draw[<->, dashed] (2, 0.5) -- (6, 3.5) node[midway, above, sloped] {Gap maximised};
+        
+    \end{tikzpicture}
+    
+    The Critic $J_\Theta$ learns the "geometry" of the image manifold by trying to separate the two distributions.
+\end{frame}
+
+\begin{frame}{Enforcing 1-Lipschitz Constraints}
+    The duality holds \textbf{only} if $J \in \text{Lip}_1(\mathcal{U})$, i.e.,
+    $$ |J(u) - J(v)| \leq \|u - v\| $$
+    
+    Without this, the supremum would be infinite (the critic could just output $\pm \infty$).
+    
+    \begin{block}{Implementation: Gradient Penalty \cite{lunz2018adversarial}}
+        We train $J_\Theta$ by minimising:
+        $$ \mathcal{L}(\Theta) = \underbrace{\mathbb{E}_{u \sim \mathbb{P}_{rec}} [J_\Theta(u)] - \mathbb{E}_{u \sim \mathbb{P}_r} [J_\Theta(u)]}_{\text{Maximise separation}} + \lambda \underbrace{\mathbb{E}_{\hat{u}} \left[ (\|\nabla_u J_\Theta(\hat{u})\|_2 - 1)^2 \right]}_{\text{Enforce Lipschitz=1}} $$
+    \end{block}
+    
+    $\hat{u}$ are samples interpolated between real and fake images.
+\end{frame}
+
+\begin{frame}{The Variational Step}
+    Once the Critic $J_\Theta^*$ is trained, it serves as our regulariser.
+    
+    For a new noisy measurement $f^\delta$, we solve:
+    \begin{align}
+        u^* = \argmin_{u \in \mathcal{U}} \left\{ \frac12 \|Ku - f^\delta\|_\mathcal{V}^2 + \alpha J_\Theta^*(u) \right\}
+    \end{align}
+    
+    \textbf{Interpretation:}
+    We are looking for a solution $u$ that fits the data, but for which the critic outputs a low value (i.e., the critic thinks it belongs to $\mathbb{P}_r$).
+\end{frame}
+
+\section{Convex Adversarial Regularisers}
+
+\begin{frame}{The Limitation of Standard AR}
+    \begin{alertblock}{Problem}
+        Standard Adversarial Regularisers $J_\Theta$ (standard CNNs) are \textbf{non-convex}.
+        The final variational minimisation problem has multiple local minima.
+        Gradient descent might get stuck in a bad local minimum.
+    \end{alertblock}
+    
+    We want the powerful unsupervised learning of AR, but the stability of convex optimisation.
+\end{frame}
+
+\begin{frame}{Convex Adversarial Regularisers}
+    \cite{mukherjee2020learned} proposed parameterising the Critic using \textbf{Input Convex Neural Networks (ICNNs)}.
+    
+    $$ J_\Theta(u) := \text{ICNN}(u) $$
+    
+    \begin{itemize}
+        \item \textbf{Training:} Train the ICNN to distinguish $\mathbb{P}_r$ and $\mathbb{P}_{rec}$ (Wasserstein framework).
+        \item \textbf{Inference:} Solve $\argmin \frac12 \|Ku - f\|^2 + \alpha \text{ICNN}(u)$.
+    \end{itemize}
+    
+    \pause
+    \begin{theoremblock}{Result}
+        Since the data fidelity term is convex (for linear $K$) and the ICNN is convex by construction, the total functional is \textbf{convex}.
+        \begin{itemize}
+            \item Unique global minimiser.
+            \item Solvable with standard convex solvers (e.g., FISTA, Chambolle-Pock).
+        \end{itemize}
+    \end{theoremblock}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Summary of Neural Network Regularisers}
+    We have covered three major paradigms in this module:
+    
+    \begin{enumerate}
+        \item \textbf{Block 1: End-to-End (Black Box)}
+        \begin{itemize}
+            \item Map $f^\delta \to u$ directly.
+            \item Fast, but unstable and lacks data consistency.
+        \end{itemize}
+        \item \textbf{Block 2: Rigorous Integration (Analysis)}
+        \begin{itemize}
+            \item Null Space Networks (Hard Consistency).
+            \item NETT (Learning $J_\Theta(u)$).
+        \end{itemize}
+        \item \textbf{Block 3: Synthesis \& Unsupervised}
+        \begin{itemize}
+            \item DESYRE (Optimise latent code $\gamma$).
+            \item Adversarial Regularisers (Learning from unpaired distributions).
+        \end{itemize}
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Outlook}
+    The field is moving towards:
+    \begin{itemize}
+        \item \textbf{Explainability:} Understanding exactly what features the network uses.
+        \item \textbf{Uncertainty Quantification:} Not just $u$, but a probability map $P(u|f)$.
+        \item \textbf{Posterior Sampling:} Using Diffusion Models (Score-Based Generative Models) to sample from the posterior.
+    \end{itemize}
+    
+    \vspace{1em}
+    \centering
+    \textit{Thank you for your attention!}
+\end{frame}
+
+% --- References Frame ---
+\begin{frame}[allowframebreaks]{References}
+    \footnotesize
+    \bibliographystyle{plain}
+    \bibliography{../../Lecture_Notes/references.bib}
+\end{frame}
+
+\end{document}
