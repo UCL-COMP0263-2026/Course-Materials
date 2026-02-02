@@ -1,4 +1,4 @@
-\chapter{Regularisation}
+\chapter{Regularisation}\label{ch:reg}
 
 In the previous chapter, we established that most interesting inverse problems are ill-posed. While the Moore-Penrose inverse $K^\dagger$ provides a unique minimal norm least-squares solution, it is typically still unstable (unbounded) when applied to compact operators or severely ill-conditioned matrices. As demonstrated in Section \ref{sec:svd}, the decay of the singular values $\sigma_j \to 0$ causes the terms $1/\sigma_j$ in the SVD expansion of $K^\dagger f$ (Equation \eqref{eq:moore_penrose_svd}) to amplify noise drastically.
 
@@ -290,7 +290,7 @@ If $F$ is convex and Fréchet differentiable at $u^*$, then the subdifferential 
 \subsubsection{Bregman Distance}
 The Bregman distance is a concept derived from a convex functional that measures a form of "distance" between two points in the sense that it measures the distance between a functional in one argument and its linearisation in another. It is not a metric in the traditional sense, as it is generally not symmetric.
 
-\begin{defi}[Bregman Distance \cite{bregman,kiwiel1997proximal}]\normalfont
+\begin{defi}[Bregman Distance \cite{bregman,kiwiel1997proximal}]\label{defi:bregman}\normalfont
 Let $F \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a convex functional. For any two points $u_1, u_2 \in \mathcal{D}(F)$ and a subgradient $p_2 \in \partial F(u_2)$, the \emph{Bregman distance} between $u_1$ and $u_2$ is defined as
 $$D_F^{p_2}(u_1, u_2) := F(u_1) - F(u_2) - \langle p_2, u_1 - u_2 \rangle \, .$$
 \end{defi}

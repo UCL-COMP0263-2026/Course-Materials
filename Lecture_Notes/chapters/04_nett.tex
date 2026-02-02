@@ -1,0 +1,383 @@
+\chapter{Neural network-based regularisers}\label{chap:nn_reg}
+
+Building upon the principles of learning regularisation models from data, this chapter delves into a particularly powerful and flexible class of methods: those that use deep neural networks (DNNs) to define the regularisation functional itself. While the previous chapter explored learning parameters or operators within a predefined model structure (e.g., Fields of Experts \cite{roth2005fields}), the approaches discussed here take a more holistic step. They replace the entire hand-crafted regulariser (like Total Variation \cite{rudin1992nonlinear}) with a highly expressive, parametric function represented by a neural network.
+
+This strategy aims to combine the best of both worlds: the robust, physics-aware framework of variational regularisation and the immense capacity of deep learning to learn complex, high-dimensional priors directly from data. By doing so, we can create regularisers that are far more attuned to the specific characteristics of the solutions we seek to reconstruct.
+
+We will begin our exploration with the \textbf{Network Tikhonov (NETT)} approach \cite{li2020nett}, a seminal framework that provided the first rigorous proof of convergence for a learned, non-convex variational method. We will then survey the broader research landscape, examining alternative and complementary philosophies such as synthesis-based regularisation (DESYRE) \cite{Obmann_2021} and adversarial regularisers \cite{lunz2018adversarial}.
+
+\section{Deep learning}\label{sec:deep-learning}
+In order to introduce a neural network-based approach for inverse problems, we first need to explain what \emph{deep neural networks} are and how they can be trained.
+
+\subsection{Deep neural networks}
+In mathematical terms, a deep neural network is simply a function that is a composition of simple, parametrised functions and potentially many of them, i.e.
+\begin{align}
+f_w(x) := \varphi_L\left( \varphi_{L - 1} \left( \cdots \varphi_1 \left( \varphi_0(x, w_1), w_2 \right) \cdots, w_{L - 1} \right), w_L \right) \, . \label{eq:dnn}
+\end{align}
+Here $\{ \varphi_l \}_{l = 1}^{L}$ is a family of $L$ so-called \emph{activation functions} that are parametrised with weights $w := \{ w_l \}_{l = 1}^{L}$. To be more precise, \eqref{eq:dnn} is a deep neural network with $L$ layers.
+
+\noindent Typical activation functions are affine-linear transformations, i.e.
+\begin{align*}
+\varphi(x, W, b) := W^\top x + b \, .
+\end{align*}
+In terms of terminology, $W \in \mathbb{R}^{n \times m}$ is a \emph{weight} matrix and $b \in \mathbb{R}^{m \times 1}$ is the \emph{bias} vector. This way $\varphi :\mathbb{R}^n \rightarrow \mathbb{R}^m$ maps inputs $x \in \mathbb{R}^n$ onto outputs $\varphi(x) \in \mathbb{R}^m$.
+
+In the following subsections, we explore specific architectural instances of this general definition, ranging from the fundamental perceptron to more modern deep residual networks.
+
+\subsection{Perceptrons}
+The simplest form of a neural network is the \emph{perceptron}, first introduced as a concept in a 1957 technical report~\cite{rosenblatt1957} and more formally by Frank Rosenblatt~\cite{rosenblatt1958}. While Rosenblatt's original model was a probabilistic system intended to model information storage in the brain, the term is now commonly associated with a simplified linear classifier.
+
+\begin{exm}[Perceptron]
+An artificial neuron known as \emph{perceptron} is defined as the nonlinear activation function
+\begin{align*}
+\varphi(x, w, b) := H(w^\top x + b) = \begin{cases} 1 & w^\top x \geq - b \\ 0 & w^\top x < -b \end{cases} \, ,
+\end{align*}
+for a weight vector $w \in \mathbb{R}^n$, a bias $b \in \mathbb{R}$, and the Heaviside step function $H$. Note that this function is a composition and itself could already be seen as two-layer neural network of the form
+\begin{align*}
+f(x, w, b) = \varphi_1( \varphi_0(x, w, b) ) 
+\end{align*}
+with $\varphi_1(x) := H(x)$ and $\varphi_0(x, w, b) := w^\top x + b$.
+\end{exm}
+
+This model received significant attention due to the famous \emph{Perceptron Convergence Theorem}~\cite{rosenblatt1962,novikoff1962}. However, it is limited by its inability to model non-linearly separable functions, a critique famously highlighted by Minsky and Papert regarding the XOR problem \cite{minsky1969}.
+
+\subsection{Shallow Neural Networks}
+A shallow neural network, commonly referred to as a single-hidden-layer neural network, directly addresses the limitations of the perceptron. By introducing a hidden layer of neurons with non-polynomial activation functions, the network gains the ability to form complex decision boundaries.
+
+\noindent We consider shallow networks mapping $x \in \mathbb{R}^n$ to a scalar output, of the form:
+\begin{align}
+    f_w(x) = \sum_{j = 1}^J c_j \, \sigma(w_j^\top \, x + b_j) \, ,\label{eq:shallownn}
+\end{align}
+where $J$ is the number of neurons in the hidden layer, $c_j \in \mathbb{R}$ are the output weights, and $\sigma$ is a non-linear activation function.
+
+The theoretical power of this architecture is captured by the \emph{Universal Approximation Theorem}. Established by Cybenko \cite{cybenko1989} and Hornik et al. \cite{hornik1989}, it states that a shallow neural network with a finite number of neurons $J$ can approximate any continuous function on compact subsets of $\mathbb{R}^n$ to any desired degree of accuracy. Hornik later showed that this property stems from the multilayer feedforward architecture itself rather than the specific choice of activation function \cite{hornik1991}.
+
+\subsection{Multi-layer Perceptrons (MLP)}
+An MLP is a natural extension of the shallow neural network, consisting of an input layer, an output layer, and multiple hidden layers \cite{goodfellow2016}. The information flows strictly forward, allowing the network to learn hierarchical features; each successive layer learns more abstract representations based on the output of the previous layer. MLPs are also commonly known as \emph{feed-forward neural networks}.
+
+Another popular activation function used in these deep structures is the \emph{Rectified Linear Unit (ReLU)} $\varphi:\mathbb{R} \rightarrow \mathbb{R}_{\geq 0}$, defined as $\varphi(x) := \max(0, x)$. It is common practice to compose affine-linear transformations with nonlinear activations. For vectors $x \in \mathbb{R}^n$, we write the vector-valued rectifier as
+\begin{align*}
+\varphi(x) := \left( \max(0, x_1), \ldots, \max(0, x_n) \right)^\top \, .
+\end{align*}
+
+\begin{exm}[ReLU MLP]
+An $L$-layer MLP with ReLU activation functions can be written recursively as
+\begin{align*}
+x^l &:= \begin{cases} \max\left(0, W_l^\top x^{l - 1} + b_l \right) & l \in \{2, \ldots, L\} \\ \max\left(0, W_1^\top x + b_1 \right) & l = 1 \end{cases} \, ,
+\end{align*}
+with the final output given by an affine transformation $f(x, w) = W_L^\top x^L + b_L$. Here the parameters $w$ are defined as the collection of all weight matrices and bias vectors, i.e. $w = \left\{ \{ W_l \}_{l = 1}^L, \{ b_l \}_{l = 1}^L \right\}$.
+\end{exm}
+
+One last notable activation function is the \emph{softmax} function, $\varphi(x)_i = \frac{\exp(x_i)}{\sum_{j} \exp(x_j)}$, which maps arguments onto the probability simplex.
+
+\subsection{Residual Networks (ResNets)}
+As networks became deeper, training became increasingly difficult due to the vanishing gradient problem \cite{glorot2010understanding}. To address this, Residual Networks (ResNets) were introduced by He et al. \cite{he2016deep}. The core innovation is the ``skip connection'', which reformulates the layers to learn residual functions. Instead of learning a mapping $x^l = \mathcal{H}(x^{l-1})$, the network learns a residual $\mathcal{F}(x^{l-1})$, such that:
+\begin{align}
+    x^l = x^{l-1} + \mathcal{F}(x^{l-1}) \, . \label{eq:resnet_block}
+\end{align}
+In the context of the ReLU networks discussed above, a residual block often takes the form:
+\begin{align*}
+    x^l = x^{l-1} + h \sigma(W_l^\top x^{l-1} + b_l) \, ,
+\end{align*}
+where $h > 0$ acts as a step-size parameter. Interestingly, this iterative structure can be interpreted as a forward Euler discretisation of an Ordinary Differential Equation (ODE) \cite{e2017dynamical,haber2017stable}. This perspective connects deep residual learning to dynamical systems and has led to stable architecture designs for inverse problems \cite{benning2019}, which we will discuss in greater detail at a later stage.
+
+\section{Training deep learning models}\label{sec:dnn-training}
+A general, non-regularised nonlinear regression model with deep neural networks reads as minimising the empirical risk
+\begin{align}
+w_t = \argmin_{w \in \mathbb{R}^n} \left\{ \frac1s \sum_{i = 1}^s \ell_i(f_w(x_i), y_i) \right\} \, ,\label{eq:dnn-empirical-risk-minimisation}
+\end{align}
+for a family of loss functions $\{ \ell_i \}_{i = 1}^s$. For example, choosing $\ell_i(z) := \frac12 | z - y_i |^2$ minimises the mean-squared error.
+
+While we can use gradient descent, the objective in \eqref{eq:dnn-empirical-risk-minimisation} is generally non-convex. To apply gradient descent, we require the gradient of the objective w.r.t. the network parameters $w$. This is done via \emph{backpropagation}, which is a fancy name for applying the chain rule to the particular network architecture.
+
+\noindent In the following, we focus on MLP architectures of the form
+\begin{subequations}
+\begin{align}
+x_i^l &= \sigma(z_i^l) \, ,\\
+z_i^l &= W_l^\top x_i^{l - 1} + b_l \, ,
+\end{align}\label{eq:dnn-constraint}%
+\end{subequations}
+for $x_i^0 = x_i$, nonlinear activation functions $\sigma$ and the empirical risk function 
+\begin{align}
+L(W_1, \ldots, W_L, b_1, \ldots, b_L) = \frac{1}{s} \sum_{i = 1}^s \ell(x_i^L, y_i)  \, ,\label{eq:dnn-empirical-risk-minimisation-v2}
+\end{align}
+but extensions to other architectures and loss functions are straight-forward.
+
+\begin{lem}
+Defining $\delta_j^l := \frac{\partial L}{\partial x_j^l}$, the partial derivatives of $L$ satisfy:
+\begin{align*}
+\delta^l_i &= \begin{cases} \sigma^\prime(z^L_i) \odot \frac1s \nabla_1 \ell(x_i^L, y_i) & l = L \\ \sigma^\prime(z^l_i) \odot W_{l + 1} \delta^{l + 1} & l \in \{1, \ldots, L - 1\} \end{cases} \, ,\\
+\frac{\partial L}{\partial b_j^l} &= \delta_j^l \, , \quad \frac{\partial L}{\partial w_{jk}^l} = \delta_j^l x_k^{l - 1} \, .
+\end{align*}
+Here $\odot$ denotes the Hadamard product.
+\end{lem}
+
+\begin{thm}[Backpropagation]\label{thm:backpropagation}
+The gradient of \eqref{eq:dnn-empirical-risk-minimisation-v2} subject to \eqref{eq:dnn-constraint} can be computed via Algorithm \ref{alg:back-prop}.
+
+\begin{algorithm}[!t]
+\caption{Backpropagation} \label{alg:back-prop}
+\textbf{Specify:} Activation function $\sigma$, samples $\{ (x_i, y_i) \}_{i = 1}^s$, weight and bias dimensions, and no. of layers $L$\\
+\textbf{Iterate:}
+\begin{algorithmic}[1]
+    \For{$i = 1, \ldots, s$}
+    \For{$l = 1, \ldots, L$}    
+    \State Forward pass: compute $z_i^l = W_l^\top x_i^{l - 1} + b_l$
+    \State Forward pass: compute $x_i^l = \sigma(z_i^l)$
+    \EndFor
+    \EndFor
+    \For{$i = 1, \ldots, s$}
+    \For{$l = L, \ldots, 1$}    
+    \State Backward pass: compute $\delta^l_i = \begin{cases} \sigma^\prime(z^L_i) \odot \frac1s \nabla_1 \ell(x_i^L, y_i) & l = L \\ \sigma^\prime(z^l_i) \odot W_{l + 1} \delta^{l + 1} & l \in \{1, \ldots, L - 1\} \end{cases}$
+    \EndFor 
+    \EndFor
+    \State Partial derivatives: compute $\frac{\partial L}{\partial b_j^l} = \delta_j^l$, for all $j \in \{ 1, \ldots, n_l\}$
+    \State Partial derivatives: compute $\frac{\partial L}{\partial w_{jk}^l} = \delta_j^l x_k^{l - 1}$, for all $j \in \{ 1, \ldots, n_l\}$ and $k \in \{ 1, \ldots, n_{l - 1}\}$.
+\end{algorithmic}
+\Return $\{ W_l \}_{l = 1}^L$ and $\{ b_l \}_{l = 1}^L$.    
+\end{algorithm}
+\end{thm}
+
+\section{Direct supervised learning: a naive approach and its pitfalls}\label{sec:direct-learning}
+
+Given the powerful expressiveness of deep neural networks demonstrated above, a natural first attempt at solving inverse problems is to treat them as standard supervised learning tasks. This approach, often termed \emph{fully learned inversion} or \emph{end-to-end learning} \cite{arridge2019solving}, trains a neural network $f_\theta$ to act as a black-box approximation of the inverse operator $K^\dagger$, directly mapping noisy data $f^\delta$ to reconstructed solutions $u$.
+
+\subsection{The supervised learning formulation}
+
+In this approach, one assembles a training dataset $\mathcal{D} = \{ (f_i^\delta, u_i^\dagger) \}_{i=1}^N$ consisting of paired measurements and ground-truth solutions. The network is trained by minimising the empirical risk \eqref{eq:dnn-empirical-risk-minimisation}, which for this data reads
+\begin{align}
+    \min_\theta \frac{1}{N} \sum_{i=1}^N \ell(f_\theta(f_i^\delta), u_i^\dagger) \, ,
+\end{align}
+and where $\ell$ is a suitable loss function again (e.g., mean squared error). Once training converges, the learned network $f_\theta$ serves as a surrogate regularisation operator. This approach has superficial attractions, though they come with caveats:
+\begin{itemize}
+    \item \textbf{Simplicity:} The formulation is straightforward standard supervised learning with no additional physical constraints.
+    \item \textbf{Inference Speed:} Once trained, a single forward pass produces a reconstruction potentially in milliseconds (depending on the complexity of the chosen network architecture). However, it is crucial to note that \emph{training} such fully connected architectures for high-dimensional data (e.g., 3D tomography) suffers from the curse of dimensionality and is often computationally prohibitive \cite{arridge2019solving}.
+    \item \textbf{Empirical success:} On specific, well-controlled datasets (e.g., denoising or limited-angle CT with fixed geometry), end-to-end networks can achieve impressive visual quality, often outperforming classical variational methods like Total Variation (TV) in terms of Peak Signal-to-Noise Ratio (PSNR).
+\end{itemize}
+
+\subsection{Critical Shortcomings}
+
+Despite empirical successes, this naive approach harbours fundamental limitations that make it unsuitable for robust scientific imaging.
+
+\subsubsection{Lack of Data Consistency}
+The learned network $f_\theta(f^\delta)$ produces a reconstruction $u_\theta$ with no guarantee that it satisfies the physical measurement model. That is, $K u_\theta \approx f^\delta$ is not enforced. The network does not explicitly account for the data likelihood, meaning the reconstruction may contain features that physically could not have generated the observed data \cite{benning2018modern}.
+
+\subsubsection{Instability and Lipschitz continuity}
+A profound theoretical issue arises from the geometry of inverse problems. Remember that the inverse mapping of a compact operator (an ill-posed problem) is inherently unbounded (discontinuous). However, neural networks are typically continuous functions with a finite Lipschitz constant $L$.
+
+To approximate a discontinuous inverse operator with a continuous neural network, the network typically requires an extremely large Lipschitz constant \cite{burger2021learned, antun2020instabilities}. This leads to \emph{adversarial vulnerability}, i.e.
+\begin{align}
+    \| f_\theta(f^\delta + \eta) - f_\theta(f^\delta) \| \leq L \| \eta \|.
+\end{align}
+If $L$ is large, a small, visually imperceptible perturbation $\eta$ in the input (adversarial noise) can be amplified into a massive artifact in the reconstruction $u$. This mathematical reality underpins the hallucinations often observed in end-to-end models.
+
+\subsubsection{Distribution shift and generalisation failure}
+The network is optimised to minimise average errors solely on the training distribution. There is no principled framework to guide adaptation when the test distribution differs -- for instance, if the noise level changes or the measurement geometry is slightly altered. Unlike variational methods, where the regularisation parameter $\alpha$ can be tuned for different noise levels, a black-box network effectively "bakes in" a fixed regularisation strategy that cannot be easily adjusted.
+
+\subsubsection{The problem of the implicit prior}
+From the perspective of inverse problems theory, when the forward operator has a non-trivial null space $\mathcal{N}(K)$, the problem is under-determined. As we have seen in Chapter \ref{ch:reg}, classical Tikhonov regularisation selects a solution based on an explicit prior (e.g., minimum $L^2$ norm).
+
+A black-box neural network does not lack a selection principle; rather, it learns an \emph{implicit} selection principle based on the bias of the training set. It effectively memorises the null-space components found in the training data. While this works if the test data matches the training statistics perfectly, it leads to significant errors if the true solution has null-space components unseen during training. The "prior" here is opaque and uncontrolled, contrasting with the transparent energy functionals of variational regularisation \cite{arridge2019solving}.
+
+\section{Null space networks and data consistency}\label{sec:null-space}
+
+We now address a fundamental architectural consideration: \emph{data consistency}. As motivated above, a recurring issue with direct end-to-end deep learning approaches (e.g., an MLP or a ResNet trained to map data $f^\delta$ directly to $u$) is that the output may not satisfy the measurement equation $K u \approx f^\delta$. This lack of data consistency can lead to hallucinations or physically impossible solutions.
+
+Schwab et al. \cite{schwab2019deep} proposed a rigorous architectural remedy known as \textbf{Null Space Networks}. This approach decomposes the reconstruction into two orthogonal components: a data-consistent part fixed by the measurements, and a learnable part that resides purely in the null space of the forward operator.
+
+\subsection{Architectural formulation}
+Let $K: \mathcal{U} \to \mathcal{V}$ be a linear operator between Hilbert spaces. Any candidate solution $u \in \mathcal{U}$ can be uniquely decomposed as
+\begin{align}
+    u = K^\dagger f + (I - K^\dagger K) z \, ,
+\end{align}
+where $K^\dagger$ is yet again the Moore-Penrose pseudo-inverse of $K$ as defined in \eqref{eq:moore_penrose_svd}, $(I - K^\dagger K)$ is the orthogonal projection onto the null space $\mathcal{N}(K)$, and $z$ can be any element in $\mathcal{U}$. The first term, $K^\dagger f$, ensures data consistency (in the minimum-norm least-squares sense), while the second term allows for the recovery of features lost during the forward process.
+
+\noindent A Null Space Network defines the reconstruction map $\Lambda_\theta: \mathcal{V} \to \mathcal{U}$ as
+\begin{align}
+    \Lambda_\theta(f) := K^\dagger f + (I - K^\dagger K) T_\theta(K^\dagger f) \, , \label{eq:null_space_net}
+\end{align}
+where $T_\theta$ is a deep neural network (e.g., an MLP) with parameters $\theta$.
+
+\subsection{Properties}
+The crucial property of this architecture is that it provides \emph{hard data consistency} by design. Applying the forward operator $K$ to the output yields:
+\begin{align*}
+    K \Lambda_\theta(f) &= K K^\dagger f + K(I - K^\dagger K) T_\theta(K^\dagger f) \\
+    &= P_{\mathcal{R}(K)} f + (K - K K^\dagger K) T_\theta(K^\dagger f) \\
+    &= P_{\mathcal{R}(K)} f \, .
+\end{align*}
+If the data $f$ lies in the range of $K$ (i.e., $f \in \mathcal{R}(K)$), then $K \Lambda_\theta(f) = f$ exactly, regardless of how the network $T_\theta$ is trained. This ensures that the deep learning component only adds information in the kernel of $K$, preventing it from altering the measured data components.
+
+\section{The Network Tikhonov (NETT) approach}\label{sec:nett}
+
+While Null Space Networks enforce consistency architecturally, they do not inherently define a regularisation method. The \textbf{Network Tikhonov (NETT)} framework, introduced by Li et al. \cite{li2020nett}, takes a different approach: it aims to adopt a variational regularisation approach and to learn the regularisation functional $J_\Theta$ itself, such that the solution is obtained by minimising a Tikhonov functional. Given noisy data $f^\delta$, we define the solution $u_\alpha^\delta$ as
+\begin{align}
+    u_\alpha^\delta = \argmin_{u \in \mathcal{U}} \left\{ \frac12 \| Ku - f^\delta \|_\mathcal{V}^2 + \alpha J_\Theta(u) \right\} \, . \label{eq:nett_functional}
+\end{align}
+This bridges the gap between deep learning and the rigorous mathematical theory of inverse problems. Before discussing the convergence properties of NETT, we first (partially) address a fundamental theoretical question: \emph{Is the Tikhonov form actually optimal?}
+
+\subsection{Optimality of learned Tikhonov regularisers}
+A key result by Alberti et al. \cite{alberti2021learning} provides a theoretical justification for learning $J_\Theta$ within the specific structure of Tikhonov regularisation, independently of the forward operator $K$.
+
+Consider a stochastic setting where the unknown solution $u$ is a random variable in $\mathcal{U}$ distributed according to a prior distribution $\pi_u$, and the measurement noise $\eta$ is independent of $u$. The authors consider the family of \textbf{generalised Tikhonov regularisers} parameterised by a shift $h \in \mathcal{U}$ and a positive operator $B$ such that
+\begin{align*} 
+    J_{h,B}(u) = \| B^{-1}(u - h) \|^2_\mathcal{U} . \end{align*} 
+The goal is to find the optimal parameters $(h,B)$ such that the estimator $\hat{u}_\alpha^{h,B}(f)$ minimising the corresponding Tikhonov functional \eqref{eq:nett_functional} is optimal in the sense of the minimum Mean Squared Error (MSE).
+
+\begin{thm}[Independence of Optimal Regulariser \cite{alberti2021learning}]
+Assume $u$ and the noise $\eta$ are independent square-integrable random variables. The optimal parameters $(h^*, B^*)$ which minimise the expected mean squared error $\mathbb{E}[\| \hat{u}_\alpha^{h,B}(Ku + \eta) - u \|_\mathcal{U}^2]$ are given by $h^* = \mathbb{E}[u] =: \mu$ and $B^* = \Sigma^{1/2}$, where $\Sigma$ is the covariance operator of $u$. Substituting these optimal parameters back into the functional yields the optimal regulariser $J_{h^*,B^*}$ (up to constants):
+\begin{align}
+    J_{h^*,B^*}(u) = \| \Sigma^{-1/2}(u - \mu) \|_\mathcal{U}^2 = \langle \Sigma^{-1}(u - \mu), u - \mu \rangle \, .
+\end{align}
+\end{thm}
+
+\noindent \textbf{Implication and limitation:} This result is profound because $J_{h^*,B^*}$ depends \emph{only} on the statistics of the signal $u$ and is independent of the forward operator $K$. This theoretically justifies training a regulariser on clean images without specific knowledge of the degradation model. However, it is crucial to note that this optimality result applies specifically to the \emph{quadratic form} of Generalised Tikhonov regularisation defined by $h$ and $B$. It does not imply that a neural network regulariser is optimal in a broader class of non-convex functionals; rather, it suggests that if we restrict ourselves to the classical variational Tikhonov framework, the ideal regulariser is the Mahalanobis distance induced by the signal's covariance.
+
+\subsection{The NETT Framework and training strategy}
+In the NETT framework, the regulariser is parameterised as
+\begin{align}
+    J_\Theta(u) := \psi(\mathcal{E}_\Theta(u)) \, ,
+\end{align}
+where $\mathcal{E}_\Theta: \mathcal{U} \to \mathcal{Z}$ is a neural network (acting as an encoder or feature extractor) mapping to a feature space $\mathcal{Z}$, and $\psi: \mathcal{Z} \to \mathbb{R}_{\geq 0}$ is a fixed, simple coercive function (typically the squared norm, $\psi(z) = \|z\|_\mathcal{Z}^2$).
+
+To approximate the "ideal" regulariser that penalises artefacts, Li et al. \cite{li2020nett} propose a contrastive training strategy. We assume any signal $u$ can be decomposed into a clean component $u^\dagger$ and an artefact component $h$. A decoder network $\mathcal{D}_\Phi$ is introduced to form an auto-encoder $\mathcal{D}_\Phi \circ \mathcal{E}_\Theta$. The system is trained to map an input $u$ to its artefact component.
+Given a training set of pairs $\{(u_i, h_i)\}_{i=1}^N$ containing both clean samples ($h=0$) and artefact-corrupted samples, the loss function is
+\begin{align}
+    \min_{\Theta, \Phi} \sum_{i=1}^N \| \mathcal{D}_\Phi(\mathcal{E}_\Theta(u_i)) - h_i \|_\mathcal{U}^2 \, .
+\end{align}
+After training, the decoder is discarded. The trained encoder $\mathcal{E}_\Theta$ will produce large feature norms for inputs containing artefacts (since it learned to extract them) and small norms for clean inputs. Thus, $J_\Theta(u) = \|\mathcal{E}_\Theta(u)\|^2$ serves as an effective regulariser.
+
+\subsubsection{Artefact-extraction data construction}
+In practice, the contrastive dataset is built from two complementary sources \cite{li2020nett,antholzer2021discretization}.
+\begin{enumerate}
+    \item \textbf{Clean samples:} ground-truth signals $u_i^\dagger$ paired with zero artefacts, $h_i = 0$.
+    \item \textbf{Artefact-laden samples:} reconstructions $z_i$ obtained by applying a simple inversion operator $B$ (e.g., the Moore-Penrose inverse $K^\dagger$ or a \href{https://en.wikipedia.org/wiki/Radon_transform#Reconstruction_approaches}{filtered back-projection operator}) to noisy data $f_i^\delta$, with target artefacts $h_i = z_i - u_i^\dagger$.
+\end{enumerate}
+% With this construction, the empirical risk can be written as
+% \begin{align}
+%     (\Theta^\star, \Phi^\star) = \argmin_{\Theta, \Phi} \frac{1}{N} \sum_{i=1}^N \| \mathcal{D}_\Phi(\mathcal{E}_\Theta(u_i)) - h_i \|_\mathcal{U}^2 \, .
+% \end{align}
+% After training, the decoder is discarded and the NETT regulariser is fixed as
+% \begin{align}
+%     J_\Theta(u) := \frac{1}{2} \|\mathcal{E}_\Theta(u)\|_\mathcal{Z}^2 \, ,
+% \end{align}
+% which is small for clean signals and large for reconstructions containing the characteristic artefacts of the inverse problem.
+
+\subsection{Mathematical Analysis of NETT}
+A major challenge in analysing \eqref{eq:nett_functional} is that for deep neural networks $\mathcal{E}_\Theta$, the resulting functional $J_\Theta$ is generally \textbf{non-convex}. Standard convex analysis tools (like the generalised Bregman distance as defined in Definition \ref{defi:bregman}) fail because subgradients may not define supporting hyperplanes. To prove convergence, Li et al. utilise the \textbf{Absolute Bregman Distance}.
+\begin{defi}[Absolute Bregman Distance]
+Let $J: \mathcal{U} \to \mathbb{R}$ be Gâteaux differentiable. The absolute Bregman distance between $u$ and $v$ is defined as
+\begin{align}
+    D_J^{\text{abs}}(u, v) := | J(u) - J(v) - \langle \nabla J(v), u - v \rangle | \, .
+\end{align}
+\end{defi}
+\noindent Unlike the standard Bregman distance, $D_J^{\text{abs}}$ is non-negative even for non-convex functionals.
+
+\subsubsection{Well-posedness and stability}
+For the Tikhonov functional $\Phi_\alpha(u) := \frac12 \|Ku - f^\delta\|^2 + \alpha J_\Theta(u)$ to admit a minimiser, the learned regulariser must satisfy specific topological properties.
+
+\begin{assumption}[NETT Regularity Assumptions \cite{li2020nett}]\label{ass:nett}
+The regulariser $J_\Theta$ satisfies:
+\begin{enumerate}
+    \item \textbf{Lower semi-continuity:} $J_\Theta$ is weakly sequentially lower semi-continuous.
+    \item \textbf{Coercivity:} The sublevel sets $M_c = \{ u \in \mathcal{U} \mid J_\Theta(u) \leq c \}$ are weakly sequentially compact.
+\end{enumerate}
+\end{assumption}
+These properties can be enforced architecturally. For example, coercivity is guaranteed if $J_\Theta(u)$ includes a term bounded from below by $\|u\|$, such as $J_\Theta(u) = \|\mathcal{E}_\Theta(u)\|^2 + \epsilon \|u\|^2$. Under Assumption \ref{ass:nett}, existence and stability of the NETT solution $u_\alpha^\delta$ are guaranteed.
+
+\subsubsection{Convergence Rates}
+Convergence rates for the reconstruction error $D_{J_\Theta}^{\text{abs}}(u_\alpha^\delta, u^\dagger)$ are derived under a generalised \emph{Variational Source Condition (VSC)}.
+\begin{defi}[Variational Source Condition]
+An element $u^\dagger$ satisfies the VSC if there exists $\beta \in [0, 1)$ and a constant $C$ such that for all $u$ in a neighbourhood of $u^\dagger$ we have
+\begin{align}
+    \langle \nabla J_\Theta(u^\dagger), u^\dagger - u \rangle \leq C D_{J_\Theta}^{\text{abs}}(u, u^\dagger) + \beta (J_\Theta(u^\dagger) - J_\Theta(u)) \, .
+\end{align}
+\end{defi}
+\begin{thm}[NETT Convergence Rates \cite{li2020nett}]\label{thm:nett_convergence}
+Let Assumption \ref{ass:nett} hold and let $u^\dagger$ satisfy the VSC. If the parameters are chosen such that $\alpha \sim \delta$, then the error decays as
+\begin{align}
+    D_{J_\Theta}^{\text{abs}}(u_\alpha^\delta, u^\dagger) = \mathcal{O}(\delta) \, .
+\end{align}
+\end{thm}
+This confirms that NETT achieves the same optimal convergence rates as convex variational methods, but with a much richer, data-driven prior.
+
+\begin{rem}[Computational caveat] While Theorem \ref{thm:nett_convergence} guarantees that the global minimiser $u_\alpha^\delta$ of the NETT functional \eqref{eq:nett_functional} achieves optimal error decay, there is an important practical caveat: due to the non-convexity of the functional, computing this global minimiser is not necessarily straightforward or computationally feasible. In practice, numerical optimisation algorithms may converge to local minima or saddle points, and there is no guarantee they will locate the global solution. This computational challenge motivates the development of more structured approaches, such as the Input Convex Neural Networks used in iNETT (discussed below), which aim to restore convexity or other favourable properties to the optimisation landscape.
+\end{rem}
+
+\section{Extensions of NETT}
+
+Following the seminal NETT paper, several extensions have been proposed to address stability and computational efficiency.
+
+\subsection{Augmented NETT (A-NETT)}
+While learned regularisers are expressive, they may lack the robustness of simple analytical priors when applied to out-of-distribution data. Obmann et al. \cite{obmann2021augmented} introduced \textbf{Augmented NETT}, which combines the learned regulariser with a classical one, i.e.,
+\begin{align}
+    J_{aug}(u) := J_\Theta(u) + \beta R(u) \, ,
+\end{align}
+where $R(u)$ is a classical functional like Total Variation or the squared $L^2$-norm. The explicit inclusion of $R(u)$ ensures that the coercivity condition is strictly met (e.g., if $R(u) = \|u\|^2$) and stabilises the reconstruction against adversarial noise that might fool the neural network $J_\Theta$.
+
+\subsection{Iterated NETT (iNETT) and Convex Neural Networks}
+The standard NETT problem is typically solved by solving a single non-convex optimisation problem. Bianchi et al. \cite{bianchi2023uniformly} proposed an iterative scheme known as \textbf{iNETT}, which integrates a data-driven regulariser into a non-stationary iterated Tikhonov framework. The algorithm generates a sequence $u_k$ via updates of the form
+\begin{align}
+    u_{k+1} = \argmin_{u \in \mathcal{U}} \left\{ \frac{1}{r}\| Ku - f^\delta \|^r + \alpha_k D_{J_{\Theta}}(u, u_k) \right\} \, ,
+\end{align}
+where $D_{J_{\Theta}}$ denotes the Bregman distance induced by the regulariser $J_\Theta$. 
+
+Crucially, to ensure the well-posedness and unique solvability of these sub-problems, $J_\Theta$ is required to be uniformly convex. This is achieved by employing \textbf{Input Convex Neural Networks (ICNNs)}. Originally proposed by Amos et al. \cite{amos2017input}, ICNNs are scalar-valued networks $f(u; \theta)$ constrained to be convex with respect to the input $u$. The convexity is enforced through specific architectural constraints on the weights and activation functions. A typical $k$-layer ICNN is defined by the recurrence
+\begin{align}
+    z_{i+1} = \sigma_i \left( W_i^{(z)} z_i + W_i^{(u)} u + b_i \right), \quad J_\Theta(u) = z_k \, ,
+\end{align}
+where $z_i$ represents the hidden activations, $u$ is the network input, and $\sigma_i$ are activation functions. To guarantee convexity in $u$, two primary constraints are imposed \cite{amos2017input}:
+\begin{enumerate}
+    \item All weights $W_i^{(z)}$ corresponding to the recurrent hidden path must be non-negative.
+    \item The activation functions $\sigma_i$ must be convex and non-decreasing (e.g., ReLU or Leaky ReLU).
+\end{enumerate}
+Weights $W_i^{(u)}$ connecting the input directly to deep layers (passthrough layers) can be negative, preserving representational power despite the convexity restrictions. 
+
+In the context of iNETT, Bianchi et al. adapted this theory to convolutional architectures, proving that enforcing non-negative weights on skip connections and specific convolutional filters results in a convex component-wise output. By augmenting the convex network with a strictly convex term (e.g., $\epsilon \|u\|^2$), the regulariser becomes uniformly convex, thereby guaranteeing that the iNETT iterations are contractive and converge to a unique solution \cite{bianchi2023uniformly}.
+
+\section{Deep Synthesis Regularisation (DESYRE)}\label{sec:desyre}
+
+The NETT framework operates on the \emph{analysis} side of variational theory (penalising the solution). The dual perspective is the \emph{synthesis} approach. Obmann et al. \cite{Obmann_2021} introduced DESYRE (DEep SYnthesis REgularisation), which models solutions as lying on a manifold defined by a generative network.
+
+Let $D_\theta: \mathcal{Z} \to \mathcal{U}$ be a deep generative decoder mapping a latent code $\gamma \in \mathcal{Z}$ to the image space. The reconstruction is defined as $u^* = D_\theta(\gamma^*)$, where the optimal code is found by
+\begin{align}
+    \gamma^* = \argmin_{\gamma \in \mathcal{Z}} \left\{ \frac12 \| K D_\theta(\gamma) - f^\delta \|_\mathcal{V}^2 + \alpha \mathcal{S}(\gamma) \right\} \, . \label{eq:desyre}
+\end{align}
+Here, $\mathcal{S}(\gamma)$ is a penalty on the coefficients, typically the $\ell_1$-norm ($\|\gamma\|_1$) to promote sparsity.
+
+\textbf{Mathematical comparison:}
+\begin{itemize}
+    \item In NETT, the non-linearity is in the penalty $J_\Theta(u)$, and we optimise over the high-dimensional space $\mathcal{U}$.
+    \item In DESYRE, the non-linearity is in the operator $D_\theta$, and we optimise over the (typically lower-dimensional) latent space $\mathcal{Z}$.
+\end{itemize}
+While \eqref{eq:desyre} is still non-convex due to $D_\theta$, the penalty $\mathcal{S}$ is convex, often allowing for efficient proximal gradient schemes in the latent space.
+
+\section{Adversarial Regularisers (AR)}\label{sec:adv-reg}
+
+The methods discussed so far typically require paired training data (clean $u^\dagger$ and noisy $f^\delta$) or at least clean images to train an auto-encoder. \textbf{Adversarial Regularisers}, introduced by Lunz et al. \cite{lunz2018adversarial}, offer a solution for the \emph{unsupervised} setting where we only have access to two unmatched distributions:
+\begin{itemize}
+    \item $\mathbb{P}_r$: The distribution of real, clean images.
+    \item $\mathbb{P}_{rec}$: The distribution of naive reconstructions (e.g., via the Moore-Penrose-inverse applied to noisy data, i.e., $K^\dagger f^\delta$) that contain artifacts and noise (due to the ill-conditioning of $K^\dagger$).
+\end{itemize}
+
+\subsection{Wasserstein Distance and the critic}
+The goal is to learn a functional $J_\Theta$ that penalises images from $\mathbb{P}_{rec}$ while favouring images from $\mathbb{P}_r$. This is formalised using the Wasserstein-1 distance (Earth Mover's Distance). By the Kantorovich-Rubinstein duality, the distance between the two distributions is expressed as
+\begin{align}
+    W_1(\mathbb{P}_r, \mathbb{P}_{rec}) = \sup_{J \in \text{Lip}_1(\mathcal{U})} \left( \mathbb{E}_{u \sim \mathbb{P}_{rec}} [J(u)] - \mathbb{E}_{u \sim \mathbb{P}_r} [J(u)] \right) \, .
+\end{align}
+Here, the regulariser $J_\Theta$ acts as the \emph{critic} (or discriminator) and is trained to maximise this discrepancy. If successful, $J_\Theta$ assigns high values to noisy reconstructions and low values to real images, effectively learning the "distance to the manifold" of true data \cite{lunz2018adversarial}.
+
+\subsection{Enforcing the 1-Lipschitz Constraint}
+The supremum in the Kantorovich duality is taken over the set of 1-Lipschitz continuous functions, denoted as $\text{Lip}_1(\mathcal{U})$. Enforcing this constraint is critical for the stability and validity of the Wasserstein approximation. 
+
+While early methods employed weight clipping, modern implementations typically utilise a gradient penalty \cite{lunz2018adversarial}. A penalty term is added to the training loss to constrain the gradient norm of the critic to one almost everywhere, i.e.,
+\begin{align}
+    \mathcal{L}(\Theta) = \mathbb{E}_{u \sim \mathbb{P}_{rec}} [J_\Theta(u)] - \mathbb{E}_{u \sim \mathbb{P}_r} [J_\Theta(u)] + \lambda \mathbb{E}_{\hat{u}} \left[ (\|\nabla_u J_\Theta(\hat{u})\|_2 - 1)^2 \right] \, ,
+\end{align}
+where $\hat{u}$ are samples interpolated between real and reconstructed images. This ensures the critic has bounded gradients, preventing the vanishing gradient problem.
+
+\subsection{Variational step and convex extensions}
+Once the optimal critic $J^*$ is trained, the reconstruction is obtained by solving the variational problem
+\begin{align*}
+    u^* = \argmin_{u \in \mathcal{U}} \left\{ \frac12 \|Ku - f^\delta\|_\mathcal{V}^2 + \alpha J^*(u) \right\} \, .
+\end{align*}
+\textbf{Convex Adversarial Regularisers:} A significant limitation of standard adversarial regularisers is that $J^*(u)$ is generally non-convex, making the final variational problem difficult to solve globally. To address this, Mukherjee et al. \cite{mukherjee2020learned} proposed parameterising the critic using ICNNS. By enforcing convexity on $J_\Theta$ (via non-negative weights and convex activation functions, as described earlier), the resulting variational problem becomes convex (assuming a convex data-fidelity term), guaranteeing a unique global minimiser and allowing for the use of efficient convex optimisation solvers \cite{mukherjee2020learned}.
