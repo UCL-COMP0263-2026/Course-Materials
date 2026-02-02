@@ -1,0 +1,579 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows, fit, decorations.pathreplacing} 
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{uclblue}{cmyk}{1,0.24,0,0.64}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\Id}{Id}
+
+\title{Neural Network-Based Regularisers}
+\subtitle{Part 1: Foundations, Deep Learning Primitives, and the Pitfalls of End-to-End Inversion}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 3rd February 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Introduction: The Deep Learning Revolution}
+
+\begin{frame}{The Rise of Deep Learning}
+    
+    
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Deep Learning is everywhere:}
+        \begin{itemize}
+            \item Image Classification (ImageNet).
+            \item Speech Recognition (Siri, Alexa).
+            \item Natural Language Processing (Transformers, GPT).
+            \item Strategic Games (AlphaGo).
+        \end{itemize}
+        
+        \column{0.5\textwidth}
+        \centering
+        \begin{tikzpicture}[scale=0.6]
+            \begin{axis}[
+                title={ImageNet Top-5 Error Rate},
+                xlabel={Year},
+                ylabel={Error Rate (\%)},
+                xmin=2010, xmax=2017,
+                ymin=0, ymax=30,
+                xtick={2010, 2011, 2012, 2013, 2014, 2015, 2016},
+                xticklabels={2010, 2011, 2012, 2013, 2014, 2015, 2016},
+                ymajorgrids=true,
+                grid style=dashed,
+            ]
+            \addplot[
+                color=red,
+                mark=square,
+                thick
+                ]
+                coordinates {
+                (2010,28.2)(2011,25.8)(2012,16.4)(2013,11.7)(2014,6.7)(2015,3.6)(2016,3.0)
+                };
+            \node at (axis cs:2012,18) [anchor=south west] {AlexNet};
+            \node at (axis cs:2015,5) [anchor=south west] {ResNet};
+            \draw[dashed, blue] (axis cs:2010,5.1) -- (axis cs:2017,5.1) node[midway, below] {Human Performance};
+            \end{axis}
+        \end{tikzpicture}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Motivation for Inverse Problems}
+    Why apply Deep Learning to Inverse Problems ($Ku = f$)?
+
+    \begin{block}{Traditional Methods (Hand-crafted)}
+        \begin{itemize}
+            \item Rely on explicit priors: $J(u) = \|u\|_{TV}$ or $\|u\|_1$.
+            \item \textbf{Pros:} Mathematically rigorous, stable, understandable.
+            \item \textbf{Cons:} Limited expressivity. "Piecewise constant" is not a perfect model for a human brain scan.
+        \end{itemize}
+    \end{block}
+
+    \pause
+    \begin{block}{Data-Driven Methods (Learned)}
+        \begin{itemize}
+            \item Learn the prior (or the inverse) from massive datasets.
+            \item \textbf{Pros:} Can model complex, hierarchical structures (textures, organs).
+            \item \textbf{Cons:} Stability guarantees are often missing (the "Black Box" problem).
+        \end{itemize}
+    \end{block}
+\end{frame}
+
+\section{Deep Learning Primitives}
+
+\begin{frame}{The Artificial Neuron}
+    
+    The fundamental building block is the \textbf{Artifical Neuron} (with its special case the \textbf{Perceptron}).
+    
+    \begin{columns}
+        \column{0.4\textwidth}
+        Mathematical formulation:
+        $$ y = \sigma\left( \sum_{i=1}^n w_i x_i + b \right) $$
+        \begin{itemize}
+            \item $x$: Inputs
+            \item $w$: Weights (Synaptic strength)
+            \item $b$: Bias (Threshold)
+            \item $\sigma$: Activation Function (Firing rate)
+        \end{itemize}
+        
+        \column{0.6\textwidth}
+        \centering
+        \begin{tikzpicture}[
+            init/.style={
+              circle,
+              draw=black,
+              fill=stone,
+              minimum size=0.5cm
+            },
+            nnode/.style={
+              circle,
+              draw=black,
+              minimum size=1cm,
+              fill=uclblue!20
+            }
+        ]
+        
+        % Inputs
+        \node[init] (x1) at (0,2) {$x_1$};
+        \node[init] (x2) at (0,1) {$x_2$};
+        \node[init] (xn) at (0,-1) {$x_n$};
+        \node at (0,0.2) {$\vdots$};
+        
+        % Weights labels
+        \node (w1) at (1.5,2.2) {$w_1$};
+        \node (w2) at (1.5,1.2) {$w_2$};
+        \node (wn) at (1.5,-0.8) {$w_n$};
+        
+        % Neuron
+        \node[nnode] (sigma) at (3,0.5) {$\sum$};
+        \node[nnode] (act) at (5,0.5) {$\sigma(\cdot)$};
+        
+        % Output
+        \node (out) at (7,0.5) {$y$};
+        
+        % Connections
+        \draw[->] (x1) -- (sigma);
+        \draw[->] (x2) -- (sigma);
+        \draw[->] (xn) -- (sigma);
+        \draw[->] (sigma) -- (act) node[midway, above] {$z$};
+        \draw[->] (act) -- (out);
+        
+        \node[above] at (sigma.north) {Aggregation};
+        \node[above] at (act.north) {Activation};
+        \end{tikzpicture}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Activation Functions}
+    The power of neural networks comes from \textbf{non-linearity}. Without $\sigma$, a deep network is just a single linear matrix multiplication.
+    
+    \begin{columns}[T]
+        \column{0.33\textwidth}
+        \centering
+        \textbf{Sigmoid}
+        \vspace{-0.35cm}
+        
+        $$ \sigma(z) = \frac{1}{1+e^{-z}} $$
+        \vspace{-0.15cm}
+        
+        \begin{tikzpicture}[scale=0.55]
+            \begin{axis}[width=5.5cm, height=5cm, axis lines=middle, ymin=-0.1, ymax=1.1]
+                \addplot[blue, thick, domain=-5:5, samples=100] {1/(1+exp(-x))};
+            \end{axis}
+        \end{tikzpicture}
+        
+        \vspace{0.05cm}
+        
+        \footnotesize{Historically used, but suffers from vanishing gradients.}
+
+        \column{0.33\textwidth}
+        \centering
+        \textbf{ReLU}
+        \vspace{-0.35cm}
+        
+        $$ \sigma(z) = \max(0, z) $$
+        \vspace{-0.15cm}
+        
+        \begin{tikzpicture}[scale=0.55]
+            \begin{axis}[width=5.5cm, height=5cm, axis lines=middle, ymin=-1, ymax=5]
+                \addplot[red, thick, domain=-5:5, samples=100] {max(0,x)};
+            \end{axis}
+        \end{tikzpicture}
+        
+        \vspace{0.05cm}
+        
+        \footnotesize{Standard in modern DL. Sparse activation, no vanishing gradient for $z>0$.}
+
+        \column{0.33\textwidth}
+        \centering
+        \textbf{Leaky ReLU}
+        \vspace{-0.35cm}
+        
+        $$ \max(0.1z, z) $$
+        \vspace{-0.15cm}
+        
+        \begin{tikzpicture}[scale=0.55]
+            \begin{axis}[width=5.5cm, height=5cm, axis lines=middle, ymin=-2, ymax=5]
+                \addplot[green!60!black, thick, domain=-5:5, samples=100] {max(0.1*x,x)};
+            \end{axis}
+        \end{tikzpicture}
+        
+        \vspace{0.05cm}
+        
+        \footnotesize{Prevents "dead neurons".}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{The Perceptron and the XOR Problem}
+    
+    The single layer Perceptron is a \textbf{linear classifier}. It separates data with a hyperplane $w^\top x + b = 0$.
+    
+    \begin{alertblock}{Limitations (Minsky \& Papert, 1969 \cite{minsky1969})}
+        A single perceptron cannot solve the \textbf{XOR problem} because the classes are not linearly separable.
+    \end{alertblock}
+    
+    \centering
+    \begin{tikzpicture}[scale=0.8]
+        \draw[->] (-0.5,0) -- (2.5,0) node[right] {$x_1$};
+        \draw[->] (0,-0.5) -- (0,2.5) node[above] {$x_2$};
+        
+        % XOR Data points
+        \node[draw, circle, fill=red, inner sep=2pt] at (0,0) {}; % 0,0 -> 0
+        \node[draw, circle, fill=red, inner sep=2pt] at (2,2) {}; % 1,1 -> 0
+        \node[draw, cross out, draw=blue, thick, inner sep=2pt] at (0,2) {}; % 0,1 -> 1
+        \node[draw, cross out, draw=blue, thick, inner sep=2pt] at (2,0) {}; % 1,0 -> 1
+        
+        \node at (1, -1) {No single line can separate red circles from blue crosses.};
+    \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Shallow Neural Networks}
+    To solve XOR, we add a \textbf{hidden layer}.
+    
+    \begin{definition}[Shallow Network]
+        $$ f_w(x) = \sum_{j = 1}^J c_j \, \sigma(w_j^\top \, x + b_j) $$
+    \end{definition}
+    
+    \begin{theoremblock}{Universal Approximation Theorem (Cybenko '89 \cite{cybenko1989})}
+        A shallow network with a sufficiently large (but finite) number of neurons $J$ can approximate any continuous function on a compact set to arbitrary precision.
+    \end{theoremblock}
+    
+    \textbf{Why Deep?} Shallow networks are inefficient. Representing complex functions might require exponentially many neurons in one layer. Depth allows for \textbf{hierarchical features}.
+\end{frame}
+
+\begin{frame}{Multi-Layer Perceptrons (MLP)}
+    Mathematically, an MLP is a \textbf{composition} of parameterised functions, i.e.,
+    \begin{align*}
+        f_w(x) := \varphi_L \circ \varphi_{L-1} \circ \cdots \circ \varphi_1(x)
+    \end{align*}
+    where each layer is typically affine-linear followed by a non-linearity
+    $$ \varphi_l(z) = \sigma(W_l z + b_l) \, . $$
+    \begin{center}
+    \begin{tikzpicture}[scale=0.7, transform shape]
+        % Input Layer
+        \foreach \i in {1,...,3}
+            \node[circle, draw, fill=green!20] (I\i) at (0,-\i) {$x_\i$};
+            
+        % Hidden Layer 1
+        \foreach \h in {1,...,4}
+            \node[circle, draw, fill=blue!20] (H1\h) at (3,-\h+0.5) {};
+            
+        % Hidden Layer 2
+        \foreach \h in {1,...,4}
+            \node[circle, draw, fill=blue!20] (H2\h) at (6,-\h+0.5) {};
+            
+        % Output Layer
+        \node[circle, draw, fill=red!20] (O1) at (9,-2) {$y$};
+        
+        % Connections
+        \foreach \i in {1,...,3}
+            \foreach \h in {1,...,4}
+                \draw[->, opacity=0.3] (I\i) -- (H1\h);
+                
+        \foreach \h in {1,...,4}
+            \foreach \k in {1,...,4}
+                \draw[->, opacity=0.3] (H1\h) -- (H2\k);
+                
+        \foreach \k in {1,...,4}
+            \draw[->, opacity=0.3] (H2\k) -- (O1);
+            
+        \node at (0, -4) {Input};
+        \node at (4.5, -4) {Hidden Layers (Feature Extraction)};
+        \node at (9, -4) {Output};
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\section{Training and Optimisation}
+
+\begin{frame}{Empirical Risk Minimisation}
+    We train the network by minimising a loss function over a dataset $\{(x_i, y_i)\}_{i=1}^s$, i.e.,
+    
+    $$ \min_{w} \mathcal{L}(w) := \frac{1}{s} \sum_{i=1}^s \ell(f_w(x_i), y_i) $$
+    
+    \begin{itemize}
+        \item $\ell(u, y) = \|u - y\|^2$ (Regression / Inverse Problems)
+        \item $\ell(u, y) = -\sum y_k \log(u_k)$ (Classification / Cross-Entropy)
+    \end{itemize}
+    
+    \textbf{The Challenge:} The loss landscape $\mathcal{L}(w)$ is highly \textbf{non-convex}.
+\end{frame}
+
+\begin{frame}{Backpropagation}
+    How do we compute gradients $\nabla_w \mathcal{L}$? We use the \textbf{Chain Rule}.
+    
+    For a single path $x \to z \to y \to \mathcal{L}$:
+    $$ \frac{\partial \mathcal{L}}{\partial x} = \frac{\partial \mathcal{L}}{\partial y} \cdot \frac{\partial y}{\partial z} \cdot \frac{\partial z}{\partial x} $$
+    
+    \textbf{Algorithm:}
+    \begin{enumerate}
+        \item \textbf{Forward Pass:} Compute activations $x^l$ from layer $1$ to $L$.
+        \item \textbf{Backward Pass:} Compute errors $\delta^l$ from layer $L$ to $1$.
+        \item \textbf{Update:} $w \leftarrow w - \eta \nabla_w \mathcal{L}$.
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Vanishing Gradients \& Stability}
+    
+    
+    In very deep networks, gradients involve products of many matrices (Jacobians).
+    $$ \nabla_{x^0} \mathcal{L} \propto \prod_{l=1}^L W_l \cdot \sigma'(z^l) $$
+    
+    \begin{alertblock}{Vanishing/Exploding Gradients}
+        \begin{itemize}
+            \item If singular values of $W_l$ are $< 1$, gradients decay exponentially to 0 \cite{bengio1994learning,glorot2010understanding}.
+            \item If $> 1$, they explode \cite{bengio1994learning,glorot2010understanding}.
+            \item Result: Deep networks (e.g., $> 20$ layers) are oftne difficult to train with standard architectures.
+        \end{itemize}
+    \end{alertblock}
+\end{frame}
+
+\section{Residual Networks \& ODEs}
+
+\begin{frame}{Residual Networks (ResNets)}
+    \textbf{Solution:} Introduce a "Skip Connection" (He et al., 2016 \cite{He2016resnet}).
+    
+    Instead of learning $x^{l+1} = \mathcal{F}(x^l)$, we learn the \textbf{residual}:
+    $$ x^{l+1} = x^l + \mathcal{F}(x^l) $$
+    
+    \begin{center}
+    \begin{tikzpicture}[node distance=2cm]
+        \node (in) {$x^l$};
+        \node[draw, rectangle, minimum width=2cm, minimum height=1cm, right=of in, align=center] (block) {Layers\\$\mathcal{F}$};
+        \node[circle, draw, right=of block] (sum) {$+$};
+        \node[right=of sum] (out) {$x^{l+1}$};
+        
+        \draw[->] (in) -- (block);
+        \draw[->] (block) -- (sum);
+        \draw[->] (sum) -- (out);
+        
+        % Skip connection
+        \draw[->] (in) to[out=90,in=90] node[midway, above] {Identity Skip Connection} (sum);
+    \end{tikzpicture}
+    \end{center}
+    
+    This creates a "gradient super-highway". Even if $\mathcal{F}$ weights are small, the gradient can flow through the identity path.
+\end{frame}
+
+\begin{frame}{ResNets as ODEs}
+    This architecture has a profound mathematical interpretation.
+    
+    Consider the Euler discretisation of an Ordinary Differential Equation (ODE):
+    $$ \frac{dx(t)}{dt} = \mathcal{F}(x(t), t) \quad \Rightarrow \quad \frac{x_{t+1} - x_t}{h} = \mathcal{F}(x_t) $$
+    $$ x_{t+1} = x_t + h \mathcal{F}(x_t) $$
+    
+    \begin{theoremblock}{Dynamical Systems View \cite{weinan2017proposal,haber2017stable}}
+        A ResNet is simply a discretised dynamical system solving an initial value problem.
+        \begin{itemize}
+            \item \textbf{Input:} Initial state $x(0)$.
+            \item \textbf{Output:} State at terminal time $x(T)$.
+            \item \textbf{Learning:} Finding the vector field (dynamics) $\mathcal{F}$ that transports data to the correct labels.
+        \end{itemize}
+    \end{theoremblock}
+\end{frame}
+
+\section{Direct Supervised Learning (End-to-End)}
+
+\begin{frame}{The Naive Approach to Inversion}
+    Given the power of DNNs, the most obvious strategy for Inverse Problems is \textbf{End-to-End Learning}.
+    
+    \textbf{Idea:} Treat $Ku = f$ as a standard regression task \cite{arridge2019solving}.
+    \begin{itemize}
+        \item Train a network $\Lambda_\theta$ to map noisy data $f^\delta$ directly to $u^\dagger$ \cite{arridge2019solving}.
+        \item $\Lambda_\theta \approx K^\dagger$ (Learning the Moore-Penrose inverse or some other selection operator).
+    \end{itemize}
+    
+    \begin{align*}
+        \min_\theta \frac{1}{N} \sum_{i=1}^N \| \Lambda_\theta(f_i^\delta) - u_i^\dagger \|^2
+    \end{align*}
+\end{frame}
+
+\begin{frame}{Why is this attractive?}
+    \begin{enumerate}
+        \item \textbf{Simplicity:} No maths required. Just collect pairs $(f^\delta, u^\dagger)$ and train a neural network.
+        \item \textbf{Inference Speed:} Once trained, reconstruction can be super efficient. No iterative solvers (e.g., ADMM) needed at test time.
+        \item \textbf{Empirical Performance:} On specific benchmarks (e.g., restricted CT geometries), they often beat TV/Tikhonov in PSNR/SSIM.
+    \end{enumerate}
+    
+    \pause
+    \begin{center}
+        \textbf{However, simply applying this "Black Box" is dangerous.}
+    \end{center}
+\end{frame}
+
+\section{Critical Shortcomings \& Instability}
+
+\begin{frame}{Pitfall 1: Lack of Data Consistency}
+    The network output $u_\theta = \Lambda_\theta(f^\delta)$ is a prediction based on training statistics.
+    
+    \begin{alertblock}{Forward Model is Ignored}
+        There is \textbf{no guarantee} that $K u_\theta \approx f^\delta$.
+    \end{alertblock}
+    
+    \begin{itemize}
+        \item The network might generate a perfect-looking image that is inconsistent with the actual measurements.
+        \item \textbf{Example:} In MRI, the network might "denoise" a small tumour because it looks like noise, or insert a healthy structure where there is none.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Pitfall 2: The Lipschitz Dilemma}
+    \textbf{Inverse Problem Theory:} Remember, for compact operators $K$, the inverse $K^\dagger$ is \textbf{unbounded} (discontinuous), i.e., 
+    $$ \|K^\dagger f\| \not\leq C \|f\| \, . $$
+    
+    \textbf{Deep Learning Reality:} Neural networks are continuous maps with a finite Lipschitz constant $L$, which means
+    $$ \|\Lambda_\theta(x) - \Lambda_\theta(y)\| \leq L \|x - y\| \, . $$
+    
+    \pause
+    \textbf{The Conflict:} To approximate a discontinuous function ($K^\dagger$) with a continuous one ($\Lambda_\theta$), the network must learn an \textbf{extremely large Lipschitz constant} $L$.
+\end{frame}
+
+\begin{frame}{Pitfall 2: Adversarial Vulnerability}
+    
+    
+    Large Lipschitz constant $\implies$ Instability.
+    
+    $$ \|\Lambda_\theta(f^\delta + \eta) - \Lambda_\theta(f^\delta)\| \leq L \|\eta\| $$
+    
+    If $L$ is large, a tiny, imperceptible perturbation $\eta$ (adversarial noise) can cause massive artefacts in the reconstruction.
+    
+    \begin{itemize}
+        \item \textbf{Antun et al. (2020):} Showed that state-of-the-art deep learning reconstruction methods are unstable to tiny perturbations that classical methods (TV, Tikhonov) handle easily \cite{antun2020instabilities}.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Pitfall 3: The "Opaque" Implicit Prior}
+    Classical Regularisation:
+    $$ \argmin \frac12 \|Ku - f\|^2 + \alpha \mathcal{R}(u) $$
+    We \textit{know} what $\mathcal{R}(u)$ does (e.g., promote sparsity). We understand the bias.
+    
+    \textbf{End-to-End Learning:}
+    The prior is \textbf{implicit}. It is the distribution of the training data.
+    
+    \begin{itemize}
+        \item The network learns to "fill in" the null-space components based on the average training example.
+        \item \textbf{Generalisation Failure:} If the test patient has a rare anomaly not seen in training, the network will likely hallucinate a "normal" feature in its place.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Summary of Dangers}
+    \begin{table}
+        \centering
+        \begin{tabular}{l|c|c}
+             & \textbf{Variational (TV)} & \textbf{Deep Learning (End-to-End)} \\
+             \hline
+             \textbf{Consistency} & Guaranteed ($Ku \approx f$) & Not Guaranteed \\
+             \textbf{Stability} & Stable (Regularised) & Unstable (High Lipschitz) \\
+             \textbf{Prior} & Explicit (Hand-crafted) & Opaque (Data Bias) \\
+             \textbf{Quality} & Limited (Cartoon-like) & High (Realistic Textures) \\
+        \end{tabular}
+    \end{table}
+    
+    \vspace{1em}
+    \textbf{Goal for Course:} Combine the Stability of Variational Methods with the Quality of Deep Learning.
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Conclusion \& Outlook}
+    \begin{itemize}
+        \item \textbf{Foundations:} Deep Learning provides powerful function approximators (Universal Approximation).
+        \item \textbf{Architecture Matters:} ResNets behave like stable ODE solvers.
+        \item \textbf{Warning:} Naive application to Inverse Problems (End-to-End) is dangerous for scientific/medical applications due to hallucinations and instability.
+    \end{itemize}
+    
+    \pause
+    \textbf{Next Steps:}
+    We will explore methods that respect physics:
+    \begin{enumerate}
+        \item \textbf{Null-Space Networks:} Force consistency.
+        \item \textbf{Learned Regularisers (NETT):} Learn $\mathcal{R}(u)$ instead of the inverse.
+        \item \textbf{Synthesis \& Unsupervised Regularisers:} DESYRE and adversarial critics.
+    \end{enumerate}
+\end{frame}
+
+% --- References Frame ---
+\begin{frame}[allowframebreaks]{References}
+    \footnotesize
+    \bibliographystyle{plain}
+    \bibliography{../../Lecture_Notes/references.bib}
+\end{frame}
+
+\end{document}

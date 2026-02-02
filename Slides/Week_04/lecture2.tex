@@ -1,0 +1,496 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows, fit} 
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{uclblue}{cmyk}{1,0.24,0,0.64}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dom}{dom}
+
+\title{Neural Network-Based Regularisers}
+\subtitle{Part 2: Rigorous Integration -- The Network Tikhonov (NETT) Framework}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 3rd February 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Introduction: Fixing the ``Black Box''}
+
+\begin{frame}{Recap: The Pitfalls of Block 1}
+    In the previous lecture, we discussed the dangers of naive End-to-End learning ($f_\theta: f^\delta \to u$):
+    
+    \begin{alertblock}{Critical Shortcomings}
+        \begin{enumerate}
+            \item \textbf{Lack of Data Consistency:} $K f_\theta(f^\delta) \not\approx f^\delta$. The forward model is ignored.
+            \item \textbf{Instability:} Approximating discontinuous inverses requires large Lipschitz constants $\to$ adversarial vulnerability.
+            \item \textbf{Opaque Priors:} The network memorises the training set bias (Implicit Prior).
+        \end{enumerate}
+    \end{alertblock}
+    
+    \pause
+    \textbf{Today's Goal:} To fix these pitfalls by integrating Deep Learning \emph{into} the rigorous theory of Variational Regularisation.
+\end{frame}
+
+\section{Enforcing Consistency: Null Space Networks}
+
+\begin{frame}{The Concept of Data Consistency}
+    We want a reconstruction $u$ that satisfies two conditions:
+    \begin{enumerate}
+        \item \textbf{Data Fidelity:} It must explain the measurements: $Ku = f$.
+        \item \textbf{Regularity:} It must look "real" (fill in missing information realistically).
+    \end{enumerate}
+    
+    \pause
+    Classical decomposition of any solution $u$ in a Hilbert space $\mathcal{U}$:
+    $$ u = \underbrace{K^\dagger f}_{\text{Range}(K^*)} + \underbrace{(I - K^\dagger K) z}_{\text{Projection onto } \mathcal{N}(K)} \, . $$
+    
+    \begin{itemize}
+        \item $K^\dagger f$: Fixed by the data (Moore-Penrose inverse).
+        \item $(I - K^\dagger K) z$: The ``invisible'' null space component we need to learn.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Null Space Networks: Architecture}
+    Schwab et al. \cite{schwab2019deep} proposed \textbf{Deep Null Space Learning}.
+    
+    We define the network $\Lambda_\theta$ as
+    \begin{align*}
+        \Lambda_\theta(f) := K^\dagger f + (I - K^\dagger K) T_\theta(K^\dagger f)
+    \end{align*}
+    
+    \begin{itemize}
+        \item $T_\theta$: A standard deep neural network (e.g., MLP or ResNet).
+        \item $(I - K^\dagger K)$: The orthogonal projection onto the null space $\mathcal{N}(K)$.
+    \end{itemize}
+    
+    \vspace{1em}
+    \centering
+    \begin{tikzpicture}[scale=0.7, transform shape]
+        \node (input) at (0,0) [draw, circle] {$f^\delta$};
+        \node (pinv) at (3,0) [draw, rectangle, fill=stone] {$K^\dagger$};
+        \node (split) at (5,0) [circle, fill, inner sep=1.5pt] {};
+        
+        \node (net) at (7, 1.5) [draw, rectangle, fill=uclblue!20, minimum width=2cm] {DNN $T_\theta$};
+        \node (proj) at (10, 1.5) [draw, rectangle, fill=stone] {$(I - K^\dagger K)$};
+        
+        \node (sum) at (12,0) [draw, circle] {$+$};
+        \node (output) at (13.5,0) {$u_{rec}$};
+        
+        \draw[->] (input) -- (pinv);
+        \draw[-] (pinv) -- (split);
+        \draw[->] (split) -- (sum) node[midway, below] {Data Consistent};
+        \draw[->] (split) |- (net);
+        \draw[->] (net) -- (proj);
+        \draw[->] (proj) -| (sum) node[midway, right] {Null Space Component};
+        \draw[->] (sum) -- (output);
+    \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Why this guarantees consistency}
+    Let's check the data consistency of the output $\Lambda_\theta(f)$.
+    We apply the forward operator $K$, which yields
+    \begin{align*}
+        K \Lambda_\theta(f) &= K \left[ K^\dagger f + (I - K^\dagger K) T_\theta(K^\dagger f) \right] \, , \\
+        &= \underbrace{K K^\dagger f}_{P_{\mathcal{R}(K)}f} + (K - \underbrace{K K^\dagger K}_{=K}) T_\theta(K^\dagger f) \, , \\
+        &= P_{\mathcal{R}(K)}f \, .
+    \end{align*}
+    
+    \pause
+    \begin{theoremblock}{Hard Data Consistency}
+        If the data $f$ lies in the range of $K$, then $K \Lambda_\theta(f) = f$ exactly.
+        The network $T_\theta$ \textbf{cannot} alter the measured data; it can only hallucinate details in the null space.
+    \end{theoremblock}
+\end{frame}
+
+\section{The NETT Framework}
+
+\begin{frame}{Beyond Architecture: Learning the Functional}
+    Null Space networks enforce consistency, but they are still an explicit mapping.
+    
+    \textbf{The Network Tikhonov (NETT)} framework (Li et al. \cite{li2020nett}) takes a variational approach. Instead of learning the inverse map, we learn the \textbf{Regulariser} $J_\Theta$.
+    
+    \begin{align*}
+        u_\alpha^\delta = \argmin_{u \in \mathcal{U}} \left\{ \frac12 \| Ku - f^\delta \|_\mathcal{V}^2 + \alpha J_\Theta(u) \right\}
+    \end{align*}
+    
+    This bridges Deep Learning and Variational Theory.
+\end{frame}
+
+\begin{frame}{Is Tikhonov Optimal?}
+    Before designing $J_\Theta$, we ask: Is the Tikhonov form optimal?
+    
+    \begin{theoremblock}{Independence of Optimal Regulariser (Alberti et al. \cite{alberti2021learning})}
+        For independent signal $u$ and noise $\eta$, the optimal Generalised Tikhonov regulariser $J(u) = \|B^{-1}(u-h)\|^2$ depends \textbf{only} on the statistics of $u$ (mean and covariance), not on the forward operator $K$.
+    \end{theoremblock}
+    
+    \textbf{Implication:} This optimality holds for the \emph{quadratic} generalised Tikhonov form $J(u)=\|B^{-1}(u-h)\|^2$, so training on clean images can transfer across inverse problems. It does \emph{not} claim optimality for a general non-convex NETT regulariser.
+\end{frame}
+
+\begin{frame}{Defining the NETT Regulariser}
+    We define the regulariser using a neural network $\mathcal{E}_\Theta$ (Encoder):
+    
+    \begin{align}
+        J_\Theta(u) := \| \mathcal{E}_\Theta(u) \|^2
+    \end{align}
+    
+    \textbf{Idea:}
+    \begin{itemize}
+        \item If $u$ is a clean, natural image $\implies J_\Theta(u)$ should be small.
+        \item If $u$ contains artefacts or noise $\implies J_\Theta(u)$ should be large.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Training Strategy: Contrastive Learning}
+    How do we train $\mathcal{E}_\Theta$ without solving the inverse problem?
+    We use an \textbf{Autoencoder} structure $(\mathcal{E}_\Theta, \mathcal{D}_\Phi)$.
+    
+    \textbf{Task:} Train the network to extract the ``artefact component'' $h$ from a corrupted image $u$.
+    
+    $$ \min_{\Theta, \Phi} \sum_{i=1}^N \| \mathcal{D}_\Phi(\mathcal{E}_\Theta(u_i)) - h_i \|^2 $$
+    
+    \begin{itemize}
+        \item $u_i$: Input image (clean or corrupted).
+        \item $h_i$: Ground truth artefact (0 for clean images).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Data Construction for Training}
+    We need a specific dataset to teach the regulariser what ``bad'' looks like.
+    
+    \begin{enumerate}
+        \item \textbf{Clean Samples:}
+        Take ground truth $u^\dagger$. Set target artefact $h := 0$.
+        \item \textbf{Artefact Samples:}
+        Take $u^\dagger$, simulate data $f^\delta = Ku^\dagger + \eta$.
+        Compute a naive reconstruction (e.g., $K^\dagger f^\delta$ or Filtered Backprojection) and call it $z$.
+        Target artefact is the difference: $h := z - u^\dagger$.
+    \end{enumerate}
+    
+    \pause
+    \textbf{Result:} The encoder $\mathcal{E}_\Theta$ learns to produce large activations ONLY when it sees the specific artefacts $h$.
+\end{frame}
+
+\begin{frame}{NETT Visualised}
+    \begin{tikzpicture}[
+    node distance=1.5cm,
+    % Updated styles for better visibility
+    layer/.style={
+        draw, 
+        rectangle, 
+        minimum height=2cm, 
+        minimum width=1.8cm, 
+        fill=uclblue!10, 
+        align=center,
+        rounded corners=2pt
+    },
+    latent/.style={
+        draw, 
+        circle, 
+        fill=stone!50, 
+        minimum size=1.2cm,
+        inner sep=2pt
+    },
+    arrow/.style={->, thick, >=stealth}
+]
+
+    % --- Nodes ---
+    
+    % 1. Input Node
+    \node[text width=2.5cm, align=center] (in) {Input $u_i$\\ \small(Clean or Noisy)};
+    
+    % 2. Encoder Node (Right of Input)
+    \node[layer, right=of in] (enc) {Encoder\\ $\mathcal{E}_\Theta$};
+    
+    % 3. Decoder Node 
+    % Positioned further right to allow the separate branch to be visible
+    \node[layer, right=3.5cm of enc] (dec) {Decoder\\ $\mathcal{D}_\Phi$};
+    
+    % 4. Norm/Features Node (The Branch)
+    % Positioned "below right" relative to Encoder to avoid overlap with Training Phase label
+    \node[latent, below right=0.5cm and 0.8cm of enc, label=below:Features] (z) {$\|\cdot\|^2$};
+    
+    % 5. Output Node (Right of Decoder)
+    \node[right=of dec, text width=2.5cm, align=center] (out) {Output $h_i$\\ \small(Artefact)};
+    
+    % --- Arrows ---
+    
+    % Input -> Encoder
+    \draw[arrow] (in) -- (enc);
+    
+    % Encoder -> Decoder (Direct path)
+    % Label moved above to avoid collision with the lower branch
+    \draw[arrow] (enc.east) -- node[above, font=\small, color=gray] {Latent State} (dec.west);
+    
+    % Encoder -> Norm (Branch path)
+    % We connect from the Encoder's east side, bending slightly downwards to the norm
+    \draw[arrow] (enc.east) to[out=-20, in=180] (z.west);
+    
+    % Decoder -> Output
+    \draw[arrow] (dec) -- (out);
+    
+    % --- Labels ---
+    
+    % Training Phase Label (Centered above the whole latent area)
+    \node[font=\bfseries, above=1.5cm of $(enc)!0.5!(dec)$] {Training Phase};
+    
+    % Inference Phase Note (Red dashed arrow below Encoder)
+    % We name the node (inf_label) so we can connect z to it
+    \draw[dashed, ->, red] (enc.south) -- ++(0,-0.8) node[below, align=center] (inf_label) {Used as\\ $J_\Theta(u)$};
+    
+    % New dashed arrow from Features (z) to the Inference label
+    \draw[dashed, ->, red] (z) -- (inf_label);
+
+\end{tikzpicture}
+    
+    After training, we discard the Decoder. The Encoder norm becomes our regulariser.
+\end{frame}
+
+\section{Mathematical Analysis \& Convergence}
+
+\begin{frame}{The Challenge of Non-Convexity}
+    Deep Neural Networks $\mathcal{E}_\Theta$ are generally \textbf{non-convex}.
+    
+    \begin{itemize}
+        \item The functional $T(u) = \frac{1}{2}\|Ku-f\|^2 + \alpha J_\Theta(u)$ may have multiple local minima.
+        \item Standard convex analysis (subgradients, standard Bregman distances) fails.
+    \end{itemize}
+    
+    \pause
+    \textbf{Solution:} The Absolute Bregman Distance (Li et al. \cite{li2020nett}), defined as
+    $$ D_J^{\text{abs}}(u, v) := | J(u) - J(v) - \langle \nabla J(v), u - v \rangle | \, . $$
+    This allows us to measure error even in non-convex landscapes.
+\end{frame}
+
+\begin{frame}{Assumption 1: Coercivity}
+    For a minimiser to exist, the regulariser must prevent the solution from blowing up.
+    
+    \begin{block}{Coercivity Assumption}
+        The sublevel sets $\{ u \mid J_\Theta(u) \leq c \}$ must be weakly sequentially compact (bounded).
+    \end{block}
+    
+    \textbf{Architectural Enforcement:}
+    A standard DNN might tend to zero at infinity. To fix this, we often enforce:
+    $$ J_\Theta(u) = \|\mathcal{E}_\Theta(u)\|^2 + \epsilon \|u\|^2 $$
+    The $\epsilon \|u\|^2$ term guarantees coercivity.
+\end{frame}
+
+\begin{frame}{Assumption 2: Lower Semi-Continuity}
+    We also require $J_\Theta$ to be weakly sequentially lower semi-continuous.
+    $$ u_n \rightharpoonup u \implies J(u) \leq \liminf_{n \rightarrow \infty} J(u_n) $$
+    
+    This ensures that if we have a minimising sequence, the limit is actually a minimiser.
+    Continuous neural networks satisfy this.
+\end{frame}
+
+\begin{frame}{Convergence Analysis}
+    Does minimising the NETT functional actually converge to the true solution $u^\dagger$ as noise $\delta \to 0$?
+    
+    We need a \textbf{Variational Source Condition}:
+    \begin{align}
+       \langle \nabla J_\Theta(u^\dagger), u^\dagger - u \rangle \leq C D_{J_\Theta}^{\text{abs}}(u, u^\dagger) + \beta (J_\Theta(u^\dagger) - J_\Theta(u)) \tag{VSC}\label{eq:vsc}
+    \end{align}
+    
+    \pause
+    \begin{theoremblock}{NETT Convergence (Li et al. \cite{li2020nett})}
+        Under \eqref{eq:vsc} and appropriate parameter choice $\alpha \sim \delta$, the reconstruction error decays optimally:
+        $$ D_{J_\Theta}^{\text{abs}}(u_\alpha^\delta, u^\dagger) = \mathcal{O}(\delta) $$
+    \end{theoremblock}
+\end{frame}
+
+\begin{frame}{The Computational Caveat}
+    \begin{alertblock}{Theory vs Practice}
+        Theorem guarantees convergence of the \textbf{global} minimiser.
+        However, since $J_\Theta$ is non-convex, numerical algorithms (e.g. Gradient Descent) may get stuck in \textbf{local} minima.
+    \end{alertblock}
+    
+    We have no guarantee that we can actually \emph{find} the global minimiser.
+    
+    $\Rightarrow$ This motivates extensions that enforce convexity.
+\end{frame}
+
+\section{Improving Robustness}
+
+\begin{frame}{Extension 1: Augmented NETT (A-NETT)}
+    To improve stability against adversarial noise and out-of-distribution data, Obmann et al. \cite{obmann2021augmented} proposed combining the learned prior with a hand-crafted one.
+    
+    $$ J_{aug}(u) := J_\Theta(u) + \beta R(u) $$
+    
+    \begin{itemize}
+        \item $J_\Theta$: Provides texture, details, high-level features.
+        \item $R(u)$: Classical term (e.g., TV or $L^2$). Provides geometric stability and coercivity.
+    \end{itemize}
+    
+    This acts as a "safety net". If the network fails, the classical regulariser takes over.
+\end{frame}
+
+\begin{frame}{Extension 2: Iterated NETT (iNETT)}
+    Bianchi et al. \cite{bianchi2023uniformly} proposed an iterative scheme:
+    $$ u_{k+1} = \argmin_u \left\{ \frac{1}{r}\|Ku - f^\delta\|^r + \alpha_k D_{J_\Theta}(u, u_k) \right\} $$
+    
+    To ensure this algorithm is well-defined and contractive, we \textbf{must} ensure $J_\Theta$ is convex.
+    
+    \textbf{Question:} How do we make a Deep Neural Network convex?
+\end{frame}
+
+\begin{frame}{Input Convex Neural Networks (ICNNs)}
+    Amos et al. \cite{amos2017input} introduced ICNNs. These are scalar-valued networks $f(u; \theta)$ convex in $u$.
+    
+    \textbf{Structure:}
+    $$ z_{i+1} = \sigma_i (W_i^{(z)} z_i + W_i^{(u)} u + b_i) $$
+    
+    \textbf{Constraints to enforce convexity:}
+    \begin{enumerate}
+        \item Weights $W_i^{(z)}$ must be \textbf{non-negative} (prevent flipping the convex shape).
+        \item Activations $\sigma_i$ must be \textbf{convex and non-decreasing} (e.g., ReLU).
+    \end{enumerate}
+    
+    Weights from input $W_i^{(u)}$ can be negative (passthrough layers).
+\end{frame}
+
+\begin{frame}{Visualising ICNNs}
+    \centering
+    \begin{tikzpicture}[
+        node distance=2cm,
+        layer/.style={draw, rectangle, fill=uclblue!10, minimum height=1.5cm},
+        arr/.style={->, thick}
+    ]
+        \node (in) {$u$};
+        \node[layer, right=of in] (h1) {$z_1$};
+        \node[layer, right=of h1] (h2) {$z_2$};
+        \node[right=of h2] (out) {$J(u)$};
+        
+        \draw[arr] (in) -- (h1);
+        \draw[arr] (h1) -- node[above] {$W \ge 0$} (h2);
+        \draw[arr] (h2) -- node[above] {$W \ge 0$} (out);
+        
+        % Passthrough
+        \draw[arr, bend right=45] (in) to node[below] {$W$ (any sign)} (h1);
+        \draw[arr, bend right=45] (in) to node[below] {$W$ (any sign)} (h2);
+        \draw[arr, bend right=45] (in) to (out);
+        
+    \end{tikzpicture}
+    
+    Using ICNNs in iNETT guarantees a unique global solution and stable iterations.
+\end{frame}
+
+% \begin{frame}{Other Philosophies: Synthesis \& Adversarial}
+%     Brief mention of alternative approaches:
+    
+%     \begin{block}{DESYRE (Deep Synthesis Regularisation)}
+%         Optimise in the latent space of a generator $u = D_\theta(\gamma)$.
+%         $$ \gamma^* = \argmin_\gamma \frac{1}{2}\|KD_\theta(\gamma) - f\|^2 + \alpha \|\gamma\|_1 $$
+%     \end{block}
+    
+%     \begin{block}{Adversarial Regularisers (AR)}
+%         Use a Critic (Discriminator) trained via Wasserstein GANs as the regulariser.
+%         $$ J_\Theta(u) \approx \text{Distance to Manifold of Real Images} $$
+%         Useful when we don't have paired training data (Unsupervised).
+%     \end{block}
+% \end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Summary: Block 2}
+    We successfully integrated Deep Learning into variational theory:
+    
+    \begin{enumerate}
+        \item \textbf{Null Space Networks:} Guarantee $Ku=f$ by construction.
+        \item \textbf{NETT:} Learns $J_\Theta(u)$ via contrastive training.
+            \begin{itemize}
+                \item Theoretical justification (Independence of Operator).
+                \item Convergence rates $\mathcal{O}(\delta)$ defined via Absolute Bregman Distance.
+            \end{itemize}
+        \item \textbf{Robustness:}
+            \begin{itemize}
+                \item A-NETT adds classical stability.
+                \item ICNNs enforce convexity for unique global minimisers.
+            \end{itemize}
+    \end{enumerate}
+    
+    \pause
+    \textbf{Next Block:} We move to \textbf{synthesis and unsupervised approaches}, including DESYRE and adversarial regularisers.
+\end{frame}
+
+% --- References Frame ---
+\begin{frame}[allowframebreaks]{References}
+    \footnotesize
+    \bibliographystyle{plain}
+    \bibliography{../../Lecture_Notes/references.bib}
+\end{frame}
+
+\end{document}
