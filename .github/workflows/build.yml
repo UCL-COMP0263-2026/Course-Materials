@@ -68,14 +68,13 @@ jobs:
       - name: Rename and upload Lecture Notes PDF
         if: success()
         run: |
-          TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-          cp Lecture_Notes/main.pdf "COMP0263_Lecture_Notes_${TIMESTAMP}.pdf"
+          cp Lecture_Notes/main.pdf "COMP0263_Lecture_Notes.pdf"
 
       - name: Upload Lecture Notes to Release
         if: success() && github.event_name == 'push'
         uses: softprops/action-gh-release@v1
         with:
-          files: COMP0263_Lecture_Notes_*.pdf
+          files: COMP0263_Lecture_Notes.pdf
           tag_name: latest
           generate_release_notes: false
           prerelease: false
@@ -124,10 +123,9 @@ jobs:
       - name: Rename and upload Slides PDF
         if: success()
         run: |
-          TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
           for pdf in Slides/Week_${{ matrix.week }}/lecture*.pdf; do
             base=$(basename "$pdf" .pdf)
-            cp "$pdf" "COMP0263_Slides_Week_${{ matrix.week }}_${base}_${TIMESTAMP}.pdf"
+            cp "$pdf" "COMP0263_Slides_Week_${{ matrix.week }}_${base}.pdf"
           done
 
       - name: Upload Slides to Release
