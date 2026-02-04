@@ -95,7 +95,7 @@
 \section{Introduction: Beyond Analysis}
 
 \begin{frame}{Recap: The Analysis Perspective}
-    In the previous lecture (Block 2), we focused on \textbf{Analysis Regularisation} (specifically NETT).
+    In the previous lecture, we focused on \textbf{Analysis Regularisation} (specifically NETT).
     
     $$ u_\alpha^\delta = \argmin_{u \in \mathcal{U}} \left\{ \frac12 \| Ku - f^\delta \|^2 + \alpha J_\Theta(u) \right\} $$
     
@@ -160,9 +160,9 @@
     
     \begin{theoremblock}{The DESYRE Functional}
         We search for the optimal latent code $\gamma^*$:
-        \begin{align}
+        \begin{align*}
             \gamma^* = \argmin_{\gamma \in \mathcal{Z}} \left\{ \frac12 \| K D_\theta(\gamma) - f^\delta \|_\mathcal{V}^2 + \alpha \mathcal{S}(\gamma) \right\}
-        \end{align}
+        \end{align*}
         The final reconstruction is $u^* = D_\theta(\gamma^*)$.
     \end{theoremblock}
     
@@ -214,13 +214,13 @@
         \item \textbf{High} for images in $\mathbb{P}_{rec}$.
     \end{itemize}
     
-    We use the \textbf{Wasserstein-1 Distance} (Earth Mover's Distance). By Kantorovich-Rubinstein duality:
-    
-    \begin{align}
+    We use the \textbf{Wasserstein-1 Distance} (Earth Mover's Distance). With Kantorovich-Rubinstein duality we derive
+    \begin{align*}
         W_1(\mathbb{P}_r, \mathbb{P}_{rec}) = \sup_{J \in \text{Lip}_1(\mathcal{U})} \left( \mathbb{E}_{u \sim \mathbb{P}_{rec}} [J(u)] - \mathbb{E}_{u \sim \mathbb{P}_r} [J(u)] \right)
-    \end{align}
-    
+    \end{align*}
     The function $J$ that achieves this supremum is the optimal \textbf{Critic}.
+
+    Here $\text{Lip}_1$ denotes the space of 1-Lipschitz functions
 \end{frame}
 
 \begin{frame}{Visualising the Critic}
@@ -257,23 +257,26 @@
     Without this, the supremum would be infinite (the critic could just output $\pm \infty$).
     
     \begin{block}{Implementation: Gradient Penalty \cite{lunz2018adversarial}}
-        We train $J_\Theta$ by minimising:
+        We train $J_\Theta$ by minimising
         $$ \mathcal{L}(\Theta) = \underbrace{\mathbb{E}_{u \sim \mathbb{P}_{rec}} [J_\Theta(u)] - \mathbb{E}_{u \sim \mathbb{P}_r} [J_\Theta(u)]}_{\text{Maximise separation}} + \lambda \underbrace{\mathbb{E}_{\hat{u}} \left[ (\|\nabla_u J_\Theta(\hat{u})\|_2 - 1)^2 \right]}_{\text{Enforce Lipschitz=1}} $$
     \end{block}
     
-    $\hat{u}$ are samples interpolated between real and fake images.
+    The variables $\hat{u}$ are samples interpolated between real and fake images.
 \end{frame}
 
 \begin{frame}{The Variational Step}
     Once the Critic $J_\Theta^*$ is trained, it serves as our regulariser.
     
-    For a new noisy measurement $f^\delta$, we solve:
-    \begin{align}
-        u^* = \argmin_{u \in \mathcal{U}} \left\{ \frac12 \|Ku - f^\delta\|_\mathcal{V}^2 + \alpha J_\Theta^*(u) \right\}
-    \end{align}
+    Hence, for a new noisy measurement $f^\delta$, we solve NETT, i.e.,
+    \begin{align*}
+        u^* = \argmin_{u \in \mathcal{U}} \left\{ \frac12 \|Ku - f^\delta\|_\mathcal{V}^2 + \alpha J_\Theta^*(u) \right\} \, .
+    \end{align*}
     
     \textbf{Interpretation:}
     We are looking for a solution $u$ that fits the data, but for which the critic outputs a low value (i.e., the critic thinks it belongs to $\mathbb{P}_r$).
+
+    \vspace{1cm}
+    We emply a different training strategy compared to standard NETT, but use the same variationa approach.
 \end{frame}
 
 \section{Convex Adversarial Regularisers}
@@ -289,10 +292,10 @@
 \end{frame}
 
 \begin{frame}{Convex Adversarial Regularisers}
-    \cite{mukherjee2020learned} proposed parameterising the Critic using \textbf{Input Convex Neural Networks (ICNNs)}.
-    
+    The authors in \cite{mukherjee2020learned} proposed parameterising the Critic using \textbf{Input Convex Neural Networks (ICNNs)}.
     $$ J_\Theta(u) := \text{ICNN}(u) $$
     
+    \vspace{0.15cm}
     \begin{itemize}
         \item \textbf{Training:} Train the ICNN to distinguish $\mathbb{P}_r$ and $\mathbb{P}_{rec}$ (Wasserstein framework).
         \item \textbf{Inference:} Solve $\argmin \frac12 \|Ku - f\|^2 + \alpha \text{ICNN}(u)$.
@@ -302,7 +305,7 @@
     \begin{theoremblock}{Result}
         Since the data fidelity term is convex (for linear $K$) and the ICNN is convex by construction, the total functional is \textbf{convex}.
         \begin{itemize}
-            \item Unique global minimiser.
+            \item Global minimiser; unique if overall term is strictly convex.
             \item Solvable with standard convex solvers (e.g., FISTA, Chambolle-Pock).
         \end{itemize}
     \end{theoremblock}
@@ -329,20 +332,8 @@
             \item DESYRE (Optimise latent code $\gamma$).
             \item Adversarial Regularisers (Learning from unpaired distributions).
         \end{itemize}
+        Next week we look into unrolling, where we use optimisation algorithms to replace neural network architectures.
     \end{enumerate}
-\end{frame}
-
-\begin{frame}{Outlook}
-    The field is moving towards:
-    \begin{itemize}
-        \item \textbf{Explainability:} Understanding exactly what features the network uses.
-        \item \textbf{Uncertainty Quantification:} Not just $u$, but a probability map $P(u|f)$.
-        \item \textbf{Posterior Sampling:} Using Diffusion Models (Score-Based Generative Models) to sample from the posterior.
-    \end{itemize}
-    
-    \vspace{1em}
-    \centering
-    \textit{Thank you for your attention!}
 \end{frame}
 
 % --- References Frame ---
