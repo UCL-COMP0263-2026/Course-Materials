@@ -71,7 +71,7 @@ jobs:
           cp Lecture_Notes/main.pdf "COMP0263_Lecture_Notes.pdf"
 
       - name: Upload Lecture Notes to Release
-        if: success() && github.event_name == 'push'
+        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: softprops/action-gh-release@v1
         with:
           files: COMP0263_Lecture_Notes.pdf
@@ -129,7 +129,7 @@ jobs:
           done
 
       - name: Upload Slides to Release
-        if: success() && github.event_name == 'push'
+        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: softprops/action-gh-release@v1
         with:
           files: COMP0263_Slides_Week_*.pdf
