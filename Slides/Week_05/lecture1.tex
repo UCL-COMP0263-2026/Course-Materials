@@ -1,0 +1,630 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows, fit, patterns} 
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{uclblue}{cmyk}{1,0.24,0,0.64}
+\definecolor{uclred}{cmyk}{0,1,0.62,0}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Theorem environments
+\newtheorem{proposition}{Proposition}
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\supremum}{sup}
+\DeclareMathOperator{\sign}{sign}
+
+\title{Unrolling Algorithms: From Iterations to Architecture}
+\subtitle{Lecture 1: Proximal Operators and Basic Algorithms}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 10th February 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Motivation \& Foundations}
+
+\begin{frame}{Recap: Variational Regularisation}
+    In previous lectures (Chapter 2 on Regularisation in the lecture notes), we established the variational framework for solving inverse problems:
+    
+    $$ u^\delta_\alpha \in \argmin_{u \in \mathcal{U}} \left\{ F(Ku, f^\delta) + \alpha J(u) \right\} $$
+    
+    \begin{itemize}
+        \item $F(Ku, f^\delta)$: Data fidelity term (e.g., $\frac{1}{2}\|Ku - f^\delta\|^2$).
+        \item $J(u)$: Regularisation term (priors).
+    \end{itemize}
+    
+    \textbf{The Computational Challenge:}
+    \begin{itemize}
+        \item How do we compute the minimiser numerically?
+        \item Standard Gradient Descent requires differentiability.
+        \item Many effective priors (e.g., $\ell^1$-norm, Total Variation) are \textbf{non-smooth}.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Handling Non-Smoothness}
+    Consider the problem:
+    $$ \min_{u} \left\{ L(u) + S(u) \right\} $$
+    where $L$ is smooth (differentiable) and $S$ is non-smooth.
+    
+    \textbf{Approaches:}
+    \begin{enumerate}
+        \item \textbf{Smoothing:} Approximate $S(u)$ with a smooth function $S_\epsilon(u)$. (e.g., Huber loss for $\ell^1$, $\sqrt{x^2 + \epsilon}$ for TV).
+        \item \textbf{Subgradient Methods:} Generalise gradients to subgradients. Often slow convergence $O(1/\sqrt{k})$.
+        \item \textbf{Proximal Algorithms:} Treat the non-smooth term strictly via the \emph{Proximal Operator}.
+    \end{enumerate}
+    
+    This chapter focuses on \textbf{Proximal Algorithms} as they form the foundation for modern unrolled deep learning architectures.
+\end{frame}
+
+\begin{frame}{The Proximal Operator: Definition}
+    \begin{definition}[Proximal Operator]\label{def:prox_operator}
+        Let $\mathcal{U}$ be a Hilbert space and $J: \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper, lower semi-continuous (l.s.c.), and convex functional. The \textbf{proximal operator} $\operatorname{prox}_J: \mathcal{U} \to \mathcal{U}$ is defined as:
+        $$ \operatorname{prox}_{J}(v) := \argmin_{u \in \mathcal{U}} \left\{ \frac12 \|u - v\|_{\mathcal{U}}^2 + J(u) \right\} \, . $$
+    \end{definition}
+    
+    \pause
+    \begin{theoremblock}{Well-posedness}
+        Since $J$ is convex and l.s.c., and $\frac12 \|u - v\|^2$ is \textbf{strongly convex} and coercive, the minimiser exists and is \textbf{unique}.
+    \end{theoremblock}
+\end{frame}
+
+\begin{frame}{Interpretation}
+    The proximal operator balances two competing goals
+    $$ \operatorname{prox}_{J}(v) = \argmin_{u} \left\{ \underbrace{\frac12 \|u - v\|_{\mathcal{U}}^2}_{\text{Stay close to } v} + \underbrace{J(u)}_{\text{Minimise functional}} \right\} $$
+    
+    \begin{itemize}
+        \item It is a generalisation of the \textbf{orthogonal projection}.
+        \item It acts as an implicit backward step with respect to $J$.
+    \end{itemize}
+    
+    \begin{example}[Projection]
+        If $J(u) = \chi_{\mathcal{C}}(u)$ (characteristic function of a convex set $\mathcal{C}$), then:
+        $$ \operatorname{prox}_{\chi_{\mathcal{C}}}(v) = \argmin_{u \in \mathcal{C}} \frac12 \|u - v\|^2 = P_{\mathcal{C}}(v) $$
+    \end{example}
+\end{frame}
+
+\begin{frame}{Visualising the Proximal Operator}
+    \textbf{Geometric Interpretation:} The proximal operator finds the point minimising distance to $v$ while respecting the structure of $J$.
+    
+    \begin{center}
+    \begin{tikzpicture}[scale=1]
+        % Convex set
+        \draw[fill=blue!10, draw=blue!50, thick] plot[smooth cycle] coordinates {(0,0) (2.5,0.3) (3,2) (2,2.8) (0.7,2.3)};
+        \node[blue!70, font=\small] at (1.5, 1.3) {Level sets of $J(u)$};
+        
+        % Point v outside
+        \node[circle, fill=red, inner sep=2.5pt, label=above right:{$v$}] (v) at (4.5, 3.2) {};
+        
+        % Proximal point
+        \node[circle, fill=darkgreen, inner sep=2.5pt, label=below right:{$\operatorname{prox}_J(v)$}] (prox) at (2.6, 2.4) {};
+        
+        % Distance line
+        \draw[thick, red!60, dashed] (v) -- (prox);
+        \node[above, rotate=-28, font=\footnotesize, red!70] at (3.55, 2.8) {minimize $\|u - v\|^2$};
+        
+        % Contour circles around prox point
+        \foreach \r in {0.6, 1.2, 1.8} {
+            \draw[gray!30, thin] (prox) circle (\r);
+        }
+        
+        % Gradient-like arrow showing balance
+        \draw[->, thick, blue!70] (prox) -- ++(0.5, -0.3) node[right, font=\tiny] {$\partial J$};
+        \draw[->, thick, red!70] (prox) -- ++(0.8, 0.35) node[above, font=\tiny] {$v - u$};
+        
+        \node[below, font=\footnotesize] at (2.2, -0.5) {The proximal operator balances proximity to $v$ and minimising $J(u)$};
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Optimality Condition}
+    The point $u^* = \operatorname{prox}_{J}(v)$ is characterised by Fermat's rule (first-order optimality condition):
+    
+    $$ 0 \in (u^* - v) + \partial J(u^*) $$
+    
+    \vspace{0.5em}
+    Rearranging terms yields
+    $$ v - u^* \in \partial J(u^*) \iff v \in (I + \partial J)(u^*) \, . $$
+    
+    \vspace{0.5em}
+    This implies
+    $$ u^* = (I + \partial J)^{-1}(v) \, . $$
+    
+    The proximal operator can be viewed as the \textbf{resolvent} of the subdifferential operator $\partial J$.
+\end{frame}
+
+\begin{frame}{Key Property: Firm Non-expansiveness}
+    A crucial property for the stability of proximal algorithms (and stability of unrolled networks) is continuity.
+    
+    \begin{proposition}[Firm Non-expansiveness]
+        The proximal operator is firmly non-expansive, i.e.,
+        $$ \|\operatorname{prox}_{J}(v_1) - \operatorname{prox}_{J}(v_2)\|^2 \leq \langle v_1 - v_2, \operatorname{prox}_{J}(v_1) - \operatorname{prox}_{J}(v_2) \rangle \, , \qquad \forall v_1, v_2$$
+    \end{proposition}
+    
+    \pause
+    \textbf{Consequence:} It is non-expansive (1-Lipschitz continuous):
+    $$ \|\operatorname{prox}_{J}(v_1) - \operatorname{prox}_{J}(v_2)\| \leq \|v_1 - v_2\| $$
+    This ensures that errors do not amplify through the proximal layers of a network.
+\end{frame}
+
+\section{Core Examples \& Theory}
+
+\begin{frame}{Moreau Decomposition}
+    Often, computing the proximal of the dual function $J^*$ is easier than $J$. The Moreau decomposition links them.
+    
+    \begin{theorem}[Moreau Decomposition]
+        For any $v \in \mathcal{U}$ and $\tau > 0$:
+        $$ v = \operatorname{prox}_{\tau J}(v) + \tau \operatorname{prox}_{\tau^{-1} J^*}(\tau^{-1}v) $$
+    \end{theorem}
+    
+    This is a generalisation of the orthogonal decomposition $v = P_V(v) + P_{V^\perp}(v)$ in linear algebra.
+\end{frame}
+
+\begin{frame}{Smoothing via Moreau Envelopes}
+    The proximal operator provides a canonical way to "smooth the non-smoothness".
+    
+    \begin{definition}[Moreau Envelope]
+        The Moreau envelope of $J$ with parameter $\tau > 0$ is:
+        $$ M_{\tau J}(v) := \min_{u \in \mathcal{U}} \left\{ \frac{1}{2\tau}\|u - v\|_{\mathcal{U}}^2 + J(u) \right\} $$
+    \end{definition}
+    
+    \textbf{Properties:}
+    \begin{itemize}
+        \item $M_{\tau J}$ is always continuously differentiable (even if $J$ is not).
+        \item The gradient is given by:
+        $$ \nabla M_{\tau J}(v) = \frac{1}{\tau} (v - \operatorname{prox}_{\tau J}(v)) $$
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Example 1: Soft Thresholding (Setup)}
+    \textbf{Problem:} The $\ell^1$-norm (LASSO, Sparse Coding).
+    $$ J(u) = \alpha \|u\|_1 = \alpha \sum_i |u_i| $$
+    
+    Since the norm is separable, we compute the proximal map component-wise:
+    $$ \operatorname{prox}_{\alpha |\cdot|}(v_i) = \argmin_{x \in \mathbb{R}} \left\{ \frac12 (x - v_i)^2 + \alpha |x| \right\} $$
+    
+    We use the subdifferential $\partial |x| = \begin{cases} \{1\} & x > 0 \\ \{-1\} & x < 0 \\ [-1, 1] & x = 0 \end{cases}$.
+\end{frame}
+
+\begin{frame}{Example 1: Soft Thresholding (Derivation)}
+    Optimality condition: $x - v_i + \alpha \partial |x| \ni 0 \implies x + \alpha s = v_i$ for $s \in \partial |x|$.
+    
+    \begin{enumerate}
+        \item \textbf{Case $x > 0$:} $s=1$. $x = v_i - \alpha$. \\
+        Valid if $v_i - \alpha > 0 \implies v_i > \alpha$.
+        
+        \item \textbf{Case $x < 0$:} $s=-1$. $x = v_i + \alpha$. \\
+        Valid if $v_i + \alpha < 0 \implies v_i < -\alpha$.
+        
+        \item \textbf{Case $x = 0$:} $s \in [-1, 1]$. $0 = v_i - \alpha s \implies v_i = \alpha s$. \\
+        Valid if $|v_i| \le \alpha$.
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Example 1: Soft Thresholding (Result)}
+    Combining the cases yields the \textbf{Soft Thresholding Operator} $\mathcal{S}_\alpha$:
+    
+    $$ \mathcal{S}_\alpha(v) = \operatorname{sign}(v) \max(0, |v| - \alpha) $$
+    
+    \begin{columns}
+        \column{0.4\textwidth}
+        \begin{equation*}
+        \mathcal{S}_\alpha(v_i) = \begin{cases} 
+        v_i - \alpha & v_i > \alpha \\ 
+        0 & |v_i| \leq \alpha \\ 
+        v_i + \alpha & v_i < -\alpha 
+        \end{cases}
+        \end{equation*}
+        
+        \column{0.6\textwidth}
+        \centering
+        \begin{tikzpicture}[scale=0.7]
+            \begin{axis}[
+                axis lines=middle,
+                xlabel={$v$},
+                ylabel={$\mathcal{S}_\alpha(v)$},
+                xmin=-3, xmax=3,
+                ymin=-3, ymax=3,
+                xtick={-1,1},
+                xticklabels={$-\alpha$, $\alpha$},
+                ytick=\empty,
+                width=8cm, height=6cm,
+                grid=major
+            ]
+            \addplot[blue, thick, domain=-3:-1] {x+1};
+            \addplot[blue, thick, domain=-1:1] {0};
+            \addplot[blue, thick, domain=1:3] {x-1};
+            \addplot[dashed, gray] coordinates {(-3,-3) (3,3)};
+            \node at (axis cs: 2, 0.5) {Shrinkage};
+            \end{axis}
+        \end{tikzpicture}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Example 2: Total Variation}
+    For Total Variation denoising (ROF model):
+    $$ J(u) = \alpha \operatorname{TV}(u) $$
+    
+    The proximal operator is:
+    $$ \operatorname{prox}_{\alpha\operatorname{TV}}(v) = \argmin_{u} \left\{ \frac12 \|u - v\|^2 + \alpha \operatorname{TV}(u) \right\} $$
+    
+    \begin{itemize}
+        \item \textbf{No closed-form solution.}
+        \item It is a convex optimisation problem itself (ROF denoising).
+        \item Can be solved via iterative methods (e.g., PDHG, FISTA) or dual approaches.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Calculus Rules for Architectures}
+    To build networks, we need to understand how $\operatorname{prox}$ acts on transformed data.
+    
+    \begin{theoremblock}{Proximal of Separable Functions}
+        If $J(u) = \sum_{i=1}^n J_i(u_i)$, then $(\operatorname{prox}_{J}(v))_i = \operatorname{prox}_{J_i}(v_i)$.
+    \end{theoremblock}
+    \emph{Justifies element-wise activation functions.}
+    
+    \begin{theoremblock}{Affine Composition}
+        If $A A^* = \gamma I$ (e.g., orthogonal matrix, tight frame):
+        $$ \operatorname{prox}_{J(A(\cdot) + b)}(v) = v + \frac{1}{\gamma} A^* \left( \operatorname{prox}_{\gamma J}(A v + b) - (A v + b) \right) $$
+    \end{theoremblock}
+    \emph{Allows efficient layers if learned weights are constrained to be orthogonal.}
+\end{frame}
+
+\section{Proximal Gradient Descent}
+
+\begin{frame}{Composite Optimisation}
+    We aim to solve the composite problem:
+    $$ \min_{u \in \mathcal{U}} \{ E(u) := L(u) + S(u) \} $$
+    
+    \textbf{Assumptions:}
+    \begin{itemize}
+        \item $L(u)$: Convex, continuously differentiable (e.g., Data Fidelity).
+        \item $\nabla L$ is $\beta$-Lipschitz: $\| \nabla L(u) - \nabla L(v) \| \leq \beta \| u - v \|$.
+        \item $S(u)$: Proper, convex, l.s.c., potentially \textbf{non-smooth} (e.g., Regularisation function).
+    \end{itemize}
+    
+    Gradient descent applies to $L$ but not $S$. We use \textbf{Proximal Gradient Descent (PGD)}, also known as Forward-Backward Splitting.
+\end{frame}
+
+\begin{frame}{Derivation of PGD}
+    Construct a local quadratic model of $L$ around $u^k$ and add $S$:
+    
+    $$ u^{k+1} = \argmin_{u} \left\{ \underbrace{L(u^k) + \langle \nabla L(u^k), u - u^k \rangle + \frac{1}{2\tau}\|u - u^k\|^2}_{\text{Quadratic Approx of } L} + S(u) \right\} $$
+    
+    Completing the square (ignoring constant terms):
+    \begin{align*}
+        u^{k+1} &= \argmin_{u} \left\{ \frac{1}{2\tau} \|u - (u^k - \tau \nabla L(u^k))\|^2 + S(u) \right\} \\
+                &= \operatorname{prox}_{\tau S}(u^k - \tau \nabla L(u^k))
+    \end{align*}
+\end{frame}
+
+\begin{frame}{Visualising the Quadratic Approximation}
+    \textbf{Why does PGD work?} We approximate $L(u)$ locally with a quadratic, then add $S(u)$.
+    
+    \begin{center}
+    \begin{tikzpicture}[scale=0.9]
+        \begin{axis}[
+            axis lines=middle,
+            xlabel={$u$},
+            ylabel={},
+            xmin=-0.5, xmax=4,
+            ymin=-0.3, ymax=4.5,
+            xtick={1.2, 2.5},
+            xticklabels={$u^k$, $u^{k+1}$},
+            ytick=\empty,
+            width=10cm, height=6.5cm,
+            legend pos=north west,
+            legend style={font=\small}
+        ]
+        % Original smooth L(u)
+        \addplot[red, very thick, domain=0:4, samples=50] {0.25*(x-1.8)^2 + 0.6};
+        \addlegendentry{$L(u)$ (smooth)}
+        
+        % Quadratic approximation at u^k
+        \addplot[blue, dashed, thick, domain=0.2:3.5, samples=50] {0.5*(x-1.2)^2 + 0.6};
+        \addlegendentry{Quadratic model at $u^k$}
+        
+        % Non-smooth S(u)
+        \addplot[darkgreen, very thick, domain=0:4, samples=50] {0.35*abs(x-1.8) + 0.2};
+        \addlegendentry{$S(u)$ (non-smooth)}
+        
+        % Combined objective (schematic)
+        \addplot[orange, thick, densely dotted, domain=0.5:3.5, samples=50] {0.5*(x-1.2)^2 + 0.35*abs(x-1.8) + 0.8};
+        \addlegendentry{$L_{\text{quad}} + S(u)$}
+        
+        % Mark points
+        \node[circle, fill=black, inner sep=2pt] at (axis cs:1.2,0.6) {};
+        \node[circle, fill=black, inner sep=2pt] at (axis cs:2.5,0.95) {};
+        
+        % Arrow showing minimization
+        \draw[->, thick, purple] (axis cs:1.2, 1.8) -- (axis cs:2.5, 1.5);
+        \node[purple, font=\small] at (axis cs:1.85, 2.2) {minimize approximation};
+        \end{axis}
+    \end{tikzpicture}
+    \end{center}
+    
+    \vspace{-0.2cm}
+    The proximal step minimizes the \emph{quadratic model + non-smooth term} exactly.
+\end{frame}
+
+\begin{frame}{The PGD Algorithm}
+    \begin{algorithm}[H]
+    \caption{Proximal Gradient Descent (PGD)}\label{alg:pgd}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} Initial guess $u^0$, step size $\tau > 0$.
+    \For{$k = 0, 1, 2, \ldots$}
+        \State $v^k = u^k - \tau \nabla L(u^k)$ \Comment{\textbf{Forward}: Gradient Step on Smooth Part}
+        \State $u^{k+1} = \operatorname{prox}_{\tau S}(v^k)$ \Comment{\textbf{Backward}: Proximal Step on Non-smooth Part}
+    \EndFor
+    \end{algorithmic}
+    \end{algorithm}
+    
+    Requires computing the gradient of $L$ and the proximal map of $S$.
+\end{frame}
+
+\begin{frame}{PGD Iteration Flow}
+    \begin{center}
+    \resizebox{!}{0.9\textheight}{%
+    \begin{tikzpicture}[node distance=1cm, auto, thick, >=stealth]
+        % State u^k
+        \node[circle, draw=blue!60, fill=blue!10, minimum size=1cm, font=\large] (uk) {$u^k$};
+        
+        % Gradient step
+        \node[rectangle, draw=red!60, fill=red!10, below left=0.8cm and 0.3cm of uk, minimum width=1.5cm, minimum height=0.75cm, align=center, font=\small] (grad) {\textbf{Forward}\\$\nabla L$};
+        
+        % Intermediate v^k
+        \node[circle, draw=orange!60, fill=orange!10, below=0.8cm of grad, minimum size=0.9cm, font=\large] (vk) {$v^k$};
+        
+        % Proximal step
+        \node[rectangle, draw=darkgreen!60, fill=darkgreen!10, below right=0.8cm and 0.3cm of vk, minimum width=1.5cm, minimum height=0.75cm, align=center, font=\small] (prox) {\textbf{Backward}\\$\operatorname{prox}_S$};
+        
+        % State u^{k+1}
+        \node[circle, draw=blue!60, fill=blue!10, below=0.8cm of prox, minimum size=1cm, font=\large] (uk1) {$u^{k+1}$};
+        
+        % Arrows
+        \draw[->, very thick] (uk) -- (grad);
+        \draw[->, very thick] (grad) -- (vk);
+        \draw[->, very thick] (vk) -- (prox);
+        \draw[->, very thick] (prox) -- (uk1);
+        
+        % Iteration loop
+        \draw[->, very thick, dashed, blue!50] (uk1.east) to[out=0, in=0, looseness=1.5] node[right, font=\footnotesize] {repeat} (uk.east);
+        
+        % Labels for steps
+        \node[red!70, font=\scriptsize] at ($(grad.west)+(-1.5, 0)$) {$v^k = u^k - \tau \nabla L(u^k)$};
+        \node[darkgreen!70, font=\scriptsize] at ($(prox.east)+(1.6, 0)$) {$u^{k+1} = \operatorname{prox}_{\tau S}(v^k)$};
+    \end{tikzpicture}%
+    }
+    \end{center}
+\end{frame}
+
+\begin{frame}{Example: Iterative Soft-Thresholding (ISTA)}
+    Consider the LASSO problem:
+    $$ \min_{u} \frac{1}{2}\|Ku - f^\delta\|^2 + \alpha \|u\|_1 $$
+    
+    \begin{itemize}
+        \item $L(u) = \frac{1}{2}\|Ku - f^\delta\|^2 \implies \nabla L(u) = K^*(Ku - f^\delta)$.
+        \item $S(u) = \alpha \|u\|_1 \implies \operatorname{prox}_{\tau S} = \mathcal{S}_{\tau\alpha}$ (Soft Thresholding).
+    \end{itemize}
+    
+    \textbf{ISTA Update:}
+    $$ u^{k+1} = \mathcal{S}_{\tau\alpha}(u^k - \tau K^*(Ku^k - f^\delta)) $$
+    
+    This is the basis for the \textbf{LISTA} (Learned ISTA) network we will study in Lecture 3.
+\end{frame}
+
+\begin{frame}{Connection to Bregman Methods}
+    PGD can be interpreted as a \textbf{Bregman Proximal Method}.
+    
+    Define the Bregman distance generating function $J(u) = \frac{1}{2\tau}\|u\|^2 - L(u)$.
+    
+    If $\tau \leq 1/\beta$, $J$ is convex. PGD corresponds to:
+    $$ u^{k+1} = \argmin_{u} \{ L(u) + S(u) + D_J(u, u^k) \} $$
+    
+    This interpretation helps in analysing convergence and designing generalised algorithms.
+\end{frame}
+
+\begin{frame}{Convergence of PGD}
+    \begin{theorem}[Convergence of PGD]
+        If a minimiser $u^*$ exists and the step size satisfies $0 < \tau < 2/\beta$, then:
+        \begin{enumerate}
+            \item The sequence $\{u^k\}$ converges to a minimiser $u^*$.
+            \item The objective function values converge at a sublinear rate:
+            $$ E(u^k) - E(u^*) \leq \frac{C}{k} = O(1/k) $$
+        \end{enumerate}
+    \end{theorem}
+    
+    This is slow compared to smooth gradient descent ($O(1/k)$ is standard for non-smooth, but we can do better).
+\end{frame}
+
+\begin{frame}{Stationarity Condition}
+    For smooth problems, we check $\|\nabla E(u)\| \to 0$.
+    For non-smooth problems, $\nabla S$ is undefined.
+    
+    We can define the \textbf{Gradient Mapping}
+    $$ G_\tau(u) := \frac{1}{\tau} \left( u - \operatorname{prox}_{\tau S}(u - \tau \nabla L(u)) \right) $$
+    
+    The point $u^*$ is a stationary point iff $G_\tau(u^*) = 0$.
+\end{frame}
+
+\begin{frame}{Strong Convexity \& Linear Convergence}
+    If the smooth part $L(u)$ is \textbf{strongly convex} (parameter $\mu > 0$), PGD converges \textbf{linearly}:
+    
+    $$ \|u^k - u^*\|^2 \leq \left( 1 - \frac{\mu}{\beta} \right)^k \|u^0 - u^*\|^2 $$
+    
+    \textbf{Motivation for Unrolling:}
+    \begin{itemize}
+        \item Most inverse problems are ill-posed $\implies$ NOT strongly convex.
+        \item Classical methods are stuck in the slow $O(1/k)$ regime.
+        \item \textbf{Hypothesis:} Learned networks can transform the problem geometry to emulate linear convergence rates empirically.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Accelerated PGD (FISTA)}
+    Can we improve the $O(1/k)$ rate without strong convexity?
+    
+    \textbf{Nesterov's Acceleration:} Introduce \emph{momentum}.
+    Evaluate the gradient not at $u^k$, but at an extrapolated point $y^k$.
+    
+    \textbf{FISTA (Fast Iterative Shrinkage-Thresholding Algorithm)} \cite{Beck2009FISTA}:
+    \begin{itemize}
+        \item Proven optimal rate for first-order methods.
+        \item $O(1/k^2)$ convergence.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{FISTA Algorithm}
+    \begin{algorithm}[H]
+    \caption{FISTA}\label{alg:fista}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} $u^0$. $\tau \in (0, 1/\beta]$. $y^0 = u^0$, $t_0 = 1$.
+    \For{$k = 0, 1, 2, \ldots$}
+        \State $u^{k+1} = \operatorname{prox}_{\tau S}(y^k - \tau \nabla L(y^k))$ \Comment{Proximal Step at $y^k$}
+        \State $t_{k+1} = \frac{1 + \sqrt{1 + 4t_k^2}}{2}$ \Comment{Update momentum weight}
+        \State $y^{k+1} = u^{k+1} + \left(\frac{t_k - 1}{t_{k+1}}\right) (u^{k+1} - u^k)$ \Comment{Extrapolation}
+    \EndFor
+    \end{algorithmic}
+    \end{algorithm}
+\end{frame}
+
+\begin{frame}{Convergence of FISTA}
+    \begin{theorem}[Convergence of FISTA]
+        Under the standard assumptions for PGD, FISTA satisfies:
+        $$ E(u^k) - E(u^*) \leq \frac{2\|u^0 - u^*\|^2}{\tau (k+1)^2} = O\left(\frac{1}{k^2}\right) $$
+    \end{theorem}
+    
+    \begin{itemize}
+        \item Significant speedup in practice for minimal extra cost.
+        \item FISTA is often the baseline for "Accelerated Unrolled Networks".
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Visualising Convergence}
+    \centering
+    \begin{tikzpicture}
+    \begin{axis}[
+        xlabel={Iterations $k$},
+        ylabel={Error $E(u^k) - E(u^*)$},
+        ymode=log,
+        domain=1:50,
+        xmin=1, xmax=50,
+        grid=major,
+        width=10cm, height=6cm,
+        legend pos=south west
+    ]
+    \addplot[red, thick] {1/x}; 
+    \addlegendentry{PGD $O(1/k)$}
+    
+    \addplot[blue, thick] {1/(x^2)};
+    \addlegendentry{FISTA $O(1/k^2)$}
+    
+    \addplot[darkgreen, thick, dashed] {0.8^x};
+    \addlegendentry{Linear (Strong Convexity)}
+    \end{axis}
+    \end{tikzpicture}
+\end{frame}
+
+\section{Summary}
+
+\begin{frame}{Summary \& Next Steps}
+    \textbf{Summary:}
+    \begin{itemize}
+        \item \textbf{Proximal Operators} generalise gradients for non-smooth functions.
+        \item \textbf{Soft Thresholding} is the analytic proximal operator for $\ell^1$.
+        \item \textbf{PGD/ISTA} solves composite problems $L(u) + S(u)$ with $O(1/k)$ rate.
+        \item \textbf{FISTA} accelerates this to $O(1/k^2)$ using momentum.
+    \end{itemize}
+    
+    \textbf{Next Lecture:}
+    \begin{itemize}
+        \item What if $\operatorname{prox}_S$ is hard to compute (e.g. $TV(u)$ or constraints)?
+        \item We will introduce \textbf{Primal-Dual Methods} (ADMM, PDHG).
+    \end{itemize}
+\end{frame}
+
+% --- References Frame ---
+\begin{frame}[allowframebreaks]{References}
+    \footnotesize
+    \bibliographystyle{plain}
+    \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}

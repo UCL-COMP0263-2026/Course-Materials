@@ -1,0 +1,503 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows, fit, patterns} 
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{uclblue}{cmyk}{1,0.24,0,0.64}
+\definecolor{uclred}{cmyk}{0,1,0.62,0}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\supremum}{sup}
+\DeclareMathOperator{\sign}{sign}
+
+\title{Unrolling Algorithms: From Iterations to Architecture}
+\subtitle{Lecture 2: Primal-Dual Methods}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 10th February 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{ADMM Foundations}
+
+\begin{frame}{Motivation: Beyond Proximal Gradient}
+    In Lecture 1, we studied Proximal Gradient Descent (PGD) for solving:
+    $$ \min_{u} \{ L(u) + S(u) \} $$
+    where $L$ is smooth and $S$ is non-smooth but "simple" (easy proximal operator).
+
+    \textbf{The Challenge:}
+    What if the problem involves:
+    \begin{itemize}
+        \item Linear constraints ($Ax = b$)?
+        \item Composite regularisers, e.g., Total Variation $S(u) = \| \nabla u \|_1$?
+        \item The proximal operator of the composite term $\operatorname{prox}_{\|\nabla \cdot \|_1}$ is intractable to compute directly.
+    \end{itemize}
+    
+    \pause
+    \textbf{Solution:} Splitting methods like the \textbf{Alternating Direction Method of Multipliers (ADMM)}.
+\end{frame}
+
+\begin{frame}{ADMM: Problem Formulation}
+    ADMM is designed for problems with separable objectives coupled by linear constraints:
+    
+    $$ \min_{x \in \mathbb{R}^n, z \in \mathbb{R}^m} \{ G(x) + F(z) \} \quad \text{subject to} \quad Ax + Bz = c $$
+    
+    \begin{itemize}
+        \item $x$: Primary variable (e.g., image).
+        \item $z$: Auxiliary splitting variable (e.g., gradient of image).
+        \item $G, F$: Convex functions (potentially non-smooth).
+        \item $A, B$: Linear operators.
+    \end{itemize}
+    See for example \cite{Gabay1983ADMM, Boyd2011ADMM}
+\end{frame}
+
+\begin{frame}{The Augmented Lagrangian}
+    We could solve this using the standard Lagrangian:
+    $$ \mathcal{L}(x, z; y) = G(x) + F(z) + \langle y, Ax + Bz - c \rangle $$
+    However, this often does not help us solving the original problem if either $G$ or $F$ is non-smooth.
+    
+    \textbf{Augmented Lagrangian:}
+    We add a quadratic penalty term:
+    $$ \mathcal{L}_\delta(x, z; y) := G(x) + F(z) + \langle y, Ax + Bz - c \rangle + \frac{\delta}{2}\|Ax + Bz - c\|^2 $$
+    where $\delta > 0$ is a penalty parameter.
+\end{frame}
+
+\begin{frame}{The ADMM Algorithm}
+    ADMM finds a saddle point of $\mathcal{L}_\delta$ by minimizing w.r.t $x$, then $z$, then updating the dual variable $y$.
+    
+    \begin{algorithm}[H]
+    \caption{Alternating Direction Method of Multipliers (ADMM)}\label{alg:admm}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} Initial guesses $z^0, y^0$, penalty $\delta > 0$.
+    \For{$k = 0, 1, 2, \ldots$}
+        \State $x^{k+1} = \argmin_{x} \mathcal{L}_\delta(x, z^k; y^k)$ \Comment{\textbf{x-minimisation}}
+        \State $z^{k+1} = \argmin_{z} \mathcal{L}_\delta(x^{k+1}, z; y^k)$ \Comment{\textbf{z-minimisation}}
+        \State $y^{k+1} = y^k + \delta (Ax^{k+1} + Bz^{k+1} - c)$ \Comment{\textbf{Dual Ascent}}
+    \EndFor
+    \end{algorithmic}
+    \end{algorithm}
+    
+    \textbf{Benefit:} $G$ and $F$ are decoupled!
+\end{frame}
+
+\begin{frame}{Example: Total Variation Denoising (ROF)}
+    Consider the ROF model for image denoising:
+    $$ \min_{u} \left\{ \frac{1}{2}\|u - f^\delta\|^2 + \alpha \operatorname{TV}(u) \right\} $$
+    where $\operatorname{TV}(u) = \|\nabla u\|_1$.
+    
+    \textbf{Variable Splitting:}
+    Introduce $z = \nabla u$. The problem becomes:
+    $$ \min_{u, z} \left\{ \frac{1}{2}\|u - f^\delta\|^2 + \alpha \|z\|_1 \right\} \quad \text{s.t.} \quad \nabla u - z = 0 $$
+    
+    Here: $G(u) = \frac{1}{2}\|u - f^\delta\|^2$, $F(z) = \alpha \|z\|_1$, $A=\nabla$, $B=-I$, $c=0$.
+\end{frame}
+
+\begin{frame}{The Split Bregman Method}
+    Applying ADMM to the ROF model is known as the \textbf{Split Bregman Method} \cite{goldstein2009split}.
+    
+    Let's derive the updates. The Augmented Lagrangian is:
+    $$ \mathcal{L}_\delta(u, z; y) = \frac{1}{2}\|u - f^\delta\|^2 + \alpha \|z\|_1 + \langle y, \nabla u - z \rangle + \frac{\delta}{2}\|\nabla u - z\|^2 $$
+    
+    Using the scaled dual variable $v = y/\delta$, we complete the square:
+    $$ \dots + \frac{\delta}{2} \|\nabla u - z + v\|^2 - \frac{\delta}{2}\|v\|^2 $$
+\end{frame}
+
+\begin{frame}{Split Bregman: u-update}
+    \textbf{Step 1: u-minimisation}
+    $$ u^{k+1} = \argmin_{u} \left\{ \frac{1}{2}\|u - f^\delta\|^2 + \frac{\delta}{2} \|\nabla u - z^k + v^k\|^2 \right\} $$
+    
+    This is a smooth quadratic problem. The optimality condition yields the linear system (Screened Poisson equation)
+    
+    $$ (I - \delta \Delta)u = f^\delta + \delta \nabla^\top(z^k - v^k) \, , $$
+    
+    where $\nabla^\top = - \text{div}$ is the negative divergence operator (respectively a discretisation of it). Ideally solved via FFT (if periodic BCs) or Gau\ss-Seidel.
+\end{frame}
+
+\begin{frame}{Split Bregman: z-update}
+    \textbf{Step 2: z-minimisation}
+    $$ z^{k+1} = \argmin_z \left\{ \alpha \|z\|_1 + \frac{\delta}{2} \|\nabla u^{k+1} - z + v^k\|^2 \right\} $$
+    
+    Rearranging terms yields
+    $$ z^{k+1} = \argmin_z \left\{ \frac{1}{2} \|z - (\nabla u^{k+1} + v^k)\|^2 + \frac{\alpha}{\delta} \|z\|_1 \right\} $$
+    
+    This is exactly the definition of the proximal operator for the $\ell^1$-norm. Hence, we have
+    $$ z^{k+1} = \mathcal{S}_{\alpha/\delta}(\nabla u^{k+1} + v^k) $$
+\end{frame}
+
+\begin{frame}{Split Bregman: Summary}
+    \textbf{Step 3: Dual Update}
+    $$ v^{k+1} = v^k + \nabla u^{k+1} - z^{k+1} $$
+    
+    \begin{columns}
+        \column{0.6\textwidth}
+        \begin{theoremblock}{Algorithm Workflow}
+            1. Solve Linear System for $u$ (Deconvolution/Denoising step). \\
+            2. Apply Soft Thresholding to $z$ (Sparsity step). \\
+            3. Add residual to dual variable (Correction step).
+        \end{theoremblock}
+        
+        \column{0.4\textwidth}
+        \centering
+        \begin{tikzpicture}[node distance=1.5cm, auto, thick]
+            \node[draw, circle, fill=uclblue!20] (u) {u};
+            \node[draw, rectangle, fill=uclred!20, below right=of u] (z) {z (Prox)};
+            \node[draw, rectangle, fill=stone, above right=of z] (v) {v (Dual)};
+            
+            \draw[->] (u) -- (z);
+            \draw[->] (z) -- (v);
+            \draw[->] (v) -- (u);
+        \end{tikzpicture}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{ADMM Convergence}
+    For convex $G$ and $F$, and linear constraints, ADMM converges to a solution.
+    
+    \begin{itemize}
+        \item \textbf{Pros:} Decomposes complex problems; robust to parameter choice $\delta$.
+        \item \textbf{Cons:} The $u$-update often requires inverting a large matrix $(I + \delta A^\top A)$.
+    \end{itemize}
+    
+    \textbf{Bottleneck for Learning:} In deep learning (unrolling), we want to avoid matrix inversions because they are computationally expensive to backpropagate through.
+\end{frame}
+
+\section{Preconditioned ADMM}
+
+\begin{frame}{The Computation Bottleneck}
+    Recall the $x$-update in ADMM:
+    $$ x^{k+1} = \argmin_{x} \left\{ G(x) + \frac{\delta}{2} \|Ax + Bz^k - c + v^k\|^2 \right\} $$
+    
+    If $G(x) = 0$ (or quadratic), this is a least-squares problem involving $A^\top A$.
+    \begin{itemize}
+        \item For CT/MRI, $A$ is large and dense/implicit.
+        \item Inverting $(I + A^\top A)$ is practically impossible per iteration.
+    \end{itemize}
+    
+    \textbf{Idea:} Can we replace the exact minimisation with a simple gradient-like step?
+\end{frame}
+
+\begin{frame}{Linearised ADMM}
+    We replace the exact $x$-minimisation with a linearised approximation of the quadratic penalty, plus a \textbf{proximal} term to keep $x$ close to $x^k$.
+    
+    We modify the objective to
+    $$ \mathcal{L}_\delta(x, z^k; y^k) + \frac{1}{2}\|x - x^k\|_{Q_1}^2 \, , $$
+    
+    for $\| \cdot \|_{Q_1} = \sqrt{\langle Q_1 \cdot, \cdot\rangle}$. Choosing $Q_1 = \frac{1}{\tau}I - \delta A^\top A$ (for $\tau$ small enough) turns the update into a purely explicit step (cf. \cite{zhang2011unified}).
+\end{frame}
+
+\begin{frame}{Algorithm: Preconditioned ADMM}
+    \begin{algorithm}[H]
+    \caption{Preconditioned ADMM}\label{alg:padmm}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} $z^0, y^0$, $\delta, \tau, \sigma > 0$.
+    \For{$k = 0, 1, 2, \ldots$}
+        \State $x^{k+1} = \operatorname{prox}_{\tau G} \left( x^k - \tau A^\top (y^k + \delta (A x^k + B z^k - c)) \right)$
+        \State $z^{k+1} = \operatorname{prox}_{\sigma F} \left( z^k - \sigma B^\top (y^k + \delta (A x^{k+1} + B z^k - c)) \right)$
+        \State $y^{k+1} = y^k + \delta (Ax^{k+1} + Bz^{k+1} - c)$
+    \EndFor
+    \end{algorithmic}
+    \end{algorithm}
+    \vspace{-0.5cm}
+    \emph{Note:} Steps now only require matrix-vector products ($A, A^\top$) and proximal maps.
+\end{frame}
+
+\begin{frame}{Condition for Convergence}
+    For the matrix $Q_1 = \frac{1}{\tau} I - \delta A^\top A$ to be positive definite (ensuring convexity of the subproblem), we require:
+    
+    $$ \tau < \frac{1}{\delta \|A\|^2} $$
+    
+    Similarly for $z$, if we linearise: $\sigma < \frac{1}{\delta \|B\|^2}$.
+    
+    \textbf{Trade-off:} Smaller steps ($\tau$) mean slower convergence but cheaper iterations (no inversion).
+\end{frame}
+
+\begin{frame}{Architecture Implication}
+    \begin{block}{Unrolling Preconditioned ADMM}
+    When we construct "Unrolled ADMM" networks, we almost always unroll the \textbf{Preconditioned} version.
+    
+    $$ x^{k+1} = \sigma_{\text{net}} ( W x^k + \dots ) $$
+    
+    \begin{itemize}
+        \item No linear solvers inside the network layers.
+        \item Strictly feed-forward.
+        \item Fully differentiable.
+    \end{itemize}
+    \end{block}
+\end{frame}
+
+\begin{frame}{Summary: ADMM Variants}
+    \begin{table}
+        \centering
+        \renewcommand{\arraystretch}{1.5}
+        \begin{tabular}{l|c|c}
+             & \textbf{Standard ADMM} & \textbf{Preconditioned ADMM} \\
+             \hline
+             \textbf{Update Type} & Implicit (Solver) & Explicit (Gradient-like) \\
+             \textbf{Cost per Iter} & High (Matrix Inversion) & Low (Matrix-Vector Mul) \\
+             \textbf{Steps to Conv} & Fewer & More \\
+             \textbf{Suitability} & Classical Opt & Deep Learning / Large Scale \\
+        \end{tabular}
+    \end{table}
+\end{frame}
+
+\section{PDHG Method}
+
+\begin{frame}{Primal-Dual Hybrid Gradient (PDHG)}
+    Also known as the \textbf{Chambolle-Pock algorithm} \cite{Chambolle2011PDHG}.
+    
+    A very popular first-order method for imaging problems of the form:
+    $$ \min_{u \in \mathcal{U}} \{ G(u) + F(Ku) \} $$
+    
+    \textbf{Why PDHG?}
+    \begin{itemize}
+        \item Handles non-smooth $G$ and $F$.
+        \item Only uses $K, K^*, \operatorname{prox}_G, \operatorname{prox}_F$.
+        \item No inner loops or matrix inversions.
+        \item Basis for "Learned Primal-Dual" (Lecture 3).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Saddle-Point Formulation}
+    We use the definition of the convex conjugate $F(v) = \sup_y \langle v, y \rangle - F^*(y)$.
+    Substitute $v = Ku$:
+    
+    $$ \min_{u \in \mathcal{U}} \left\{ G(u) + \sup_{y \in \mathcal{V}} \{ \langle Ku, y \rangle_\mathcal{V} - F^*(y) \} \right\} $$
+    
+    This yields the \textbf{Primal-Dual Saddle-Point Problem}:
+    $$ \min_{u \in \mathcal{U}} \sup_{y \in \mathcal{V}} \left\{ G(u) + \langle Ku, y \rangle - F^*(y) \right\} $$
+    
+    We aim to find a point $(u^*, y^*)$ that is a saddle point of this Lagrangian.
+\end{frame}
+
+\begin{frame}{Optimality Conditions}
+    The first-order optimality conditions are:
+    
+    $$
+    \begin{pmatrix} 0 \\ 0 \end{pmatrix} \in 
+    \begin{pmatrix} \partial G(u^*) + K^* y^* \\ \partial F^*(y^*) - K u^* \end{pmatrix}
+    $$
+    
+    PDHG can be derived by finding a zero of this inclusion using proximal steps, but crucially, it mixes information from time steps $k$ and $k+1$.
+\end{frame}
+
+\begin{frame}{The Chambolle-Pock Algorithm}
+    The standard variant uses an \textbf{extrapolation step} on the primal variable to ensure convergence.
+    
+    \begin{algorithm}[H]
+    \caption{PDHG / Chambolle-Pock}\label{alg:pdhg}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} $u^0, y^0$. Steps $\tau, \sigma > 0$. Extrapolation $\theta \in [0,1]$ (typ. 1).
+    \State Initialise $\bar{u}^0 = u^0$.
+    \For{$k = 0, 1, 2, \ldots$}
+        \State $y^{k+1} = \operatorname{prox}_{\sigma F^*}(y^k + \sigma K \bar{u}^k)$ \Comment{\textbf{Dual Update}}
+        \State $u^{k+1} = \operatorname{prox}_{\tau G}(u^k - \tau K^* y^{k+1})$ \Comment{\textbf{Primal Update}}
+        \State $\bar{u}^{k+1} = u^{k+1} + \theta (u^{k+1} - u^k)$ \Comment{\textbf{Extrapolation}}
+    \EndFor
+    \end{algorithmic}
+    \end{algorithm}
+\end{frame}
+
+\begin{frame}{Visualising the Steps}
+    \centering
+    \begin{tikzpicture}[
+        node distance=2cm, 
+        auto, 
+        thick,
+        state/.style={circle, draw, minimum size=1cm, fill=stone},
+        update/.style={rectangle, draw, fill=uclblue!10, rounded corners}
+    ]
+        % Nodes
+        \node[state] (uk) {$u^k$};
+        \node[state, right=3cm of uk] (yk) {$y^k$};
+        
+        \node[update, right=1.5cm of uk, below=1cm] (extrap) {Extrapolate $\bar{u}^k$};
+        
+        \node[update, below=2.5cm of yk] (dualup) {Dual Prox};
+        \node[state, below=1cm of dualup] (yk1) {$y^{k+1}$};
+        
+        \node[update, below=2.5cm of uk] (primalup) {Primal Prox};
+        \node[state, below=1cm of primalup] (uk1) {$u^{k+1}$};
+        
+        % Edges
+        \draw[->] (uk) -- (extrap);
+        \draw[->] (extrap) -- node[above] {$K$} (dualup);
+        \draw[->] (yk) -- (dualup);
+        \draw[->] (dualup) -- (yk1);
+        
+        \draw[->] (yk1) -- node[above] {$K^*$} (primalup);
+        \draw[->] (uk) -- (primalup);
+        \draw[->] (primalup) -- (uk1);
+        
+        \draw[->, dashed] (uk1.west) to[out=135,in=225] node[left] {Next Extrap} (extrap.west);
+        
+    \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Proximal of Conjugates}
+    The algorithm requires $\operatorname{prox}_{\sigma F^*}$.
+    
+    Using the \textbf{Moreau Decomposition} (Lecture 1), we don't need to compute $F^*$ explicitly:
+    
+    $$ y = \operatorname{prox}_{\sigma F^*}(y) + \sigma \operatorname{prox}_{\sigma^{-1} F}(\sigma^{-1} y) $$
+    
+    $$ \implies \operatorname{prox}_{\sigma F^*}(v) = v - \sigma \operatorname{prox}_{\sigma^{-1} F}(v / \sigma) $$
+    
+    This is extremely useful. For example, if $F(z) = \|z\|_1$, then $\operatorname{prox}_{F}$ is soft-thresholding, and $\operatorname{prox}_{F^*}$ is projection onto the $\ell^\infty$ ball (Clip).
+\end{frame}
+
+\begin{frame}{Convergence Condition}
+    \begin{theoremblock}{Convergence of PDHG}
+        If the step sizes $\tau$ and $\sigma$ satisfy:
+        $$ \tau \sigma \|K\|^2 < 1 $$
+        Then the sequence $(u^k, y^k)$ converges to a saddle point $(u^*, y^*)$.
+    \end{theoremblock}
+    
+    \textbf{Interpretation:}
+    PDHG can be viewed as a Proximal Point Algorithm on the variable $z=(u,y)$ with respect to a specific metric $M$:
+    $$ M = \begin{pmatrix} \frac{1}{\tau}I & -K^* \\ -K & \frac{1}{\sigma}I \end{pmatrix} $$
+    The condition guarantees $M$ is positive definite.
+\end{frame}
+
+\begin{frame}{PDHG for TV Denoising}
+    Example: $\min_u \frac{1}{2}\|u-f\|^2 + \alpha \|\nabla u\|_1$.
+    \begin{itemize}
+        \item $G(u) = \frac{1}{2}\|u-f\|^2$.
+        \item $F(z) = \alpha \|z\|_1$.
+        \item $K = \nabla$.
+    \end{itemize}
+    
+    \textbf{Updates:}
+    \begin{enumerate}
+        \item Dual: $y^{k+1} = P_{\alpha B_\infty} (y^k + \sigma \nabla \bar{u}^k)$ (Projection onto $\ell^\infty$ ball).
+        \item Primal: $u^{k+1} = \frac{u^k + \tau f - \tau \nabla^\top y^{k+1}}{1 + \tau}$ (Prox of quadratic).
+        \item Extrap: $\bar{u}^{k+1} = 2u^{k+1} - u^k$.
+    \end{enumerate}
+    \emph{Highly parallelisable on GPUs.}
+\end{frame}
+
+\begin{frame}{Preconditioned ADMM vs. PDHG}
+    Both avoid matrix inversions.
+    
+    \begin{itemize}
+        \item \textbf{Preconditioned ADMM:}
+        Derived from Aug. Lagrangian. Sequence of primal/dual updates. Requires two parameters $\tau, \sigma$ related to $\delta$.
+        
+        \item \textbf{PDHG:}
+        Derived from Saddle Point. Simultaneous updates with extrapolation.
+        Ideally suited for problems where the "hard" part is $F(Ku)$.
+    \end{itemize}
+    
+    Reference \cite{Chambolle2011PDHG} discusses relations between these methods.
+\end{frame}
+
+\begin{frame}{Looking Ahead: Learned Primal-Dual}
+    In Lecture 3, we will see the \textbf{Learned Primal-Dual (LPD)} architecture \cite{adler2018learned}.
+    
+    \textbf{Key Idea:}
+    Take the PDHG iterations:
+    $$ y^{k+1} = \text{prox}(y^k + \sigma K \bar{u}^k) $$
+    $$ u^{k+1} = \text{prox}(u^k - \tau K^* y^{k+1}) $$
+    
+    And replace the fixed Proximal Operators with \textbf{Convolutional Neural Networks} (CNNs).
+    The algorithm becomes the architecture!
+\end{frame}
+
+\section{Summary}
+
+\begin{frame}{Summary}
+    \begin{itemize}
+        \item \textbf{ADMM:} Robust splitting method. Decouples constraints and non-smooth terms. Standard form requires linear solvers.
+        \item \textbf{Split Bregman:} ADMM applied to $\ell^1$/TV regularisation.
+        \item \textbf{Preconditioned ADMM:} Linearises the quadratic penalty. Eliminates matrix inversions. Key for deep learning.
+        \item \textbf{PDHG (Chambolle-Pock):} Elegant saddle-point solver. Explicit updates involving $K, K^*$.
+        \item \textbf{Convergence:} Guaranteed for convex problems if step sizes are chosen correctly ($\tau \sigma \|L\|^2 < 1$).
+    \end{itemize}
+\end{frame}
+
+% --- References Frame ---
+\begin{frame}[allowframebreaks]{References}
+    \footnotesize
+    \bibliographystyle{plain}
+    \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}
