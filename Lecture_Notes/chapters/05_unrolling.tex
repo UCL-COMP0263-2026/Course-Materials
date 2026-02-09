@@ -1,0 +1,657 @@
+\chapter{Unrolling algorithms: from iterations to architecture}
+TBD
+
+\section{Proximal algorithms}
+We have substantially talked about variational regularisation methods in Chapter \ref{ch:reg}, as a basis for non-smooth but model-based reconstruction methods for inverse problems. What we haven't talked about much, only in form of formative assessments and courseworks, is how we compute their solutions numerically. Given the non-smoothness of functions such as the one-norm or the total variation as used in Examples \ref{exm:lasso} and \ref{exm:rof_inv}, we cannot simply approximate these problems with smooth, gradient-based optimisation methods without smoothing the non-smoothness. An alternative approach are so-called proximal algorithms, based on the definition of a proximal map as introduced in \eqref{eq:prox}. Let us revisit the definition of the proximal operator and explore how it can be used 
+
+\subsection{The proximal operator}
+
+In the realm of convex optimisation, especially when dealing with non-smooth functionals such as the $\ell^1$-norm (Example \ref{exm:lasso}) or Total Variation (Example \ref{exm:rof_inv}), the gradient is often undefined. The \emph{proximal operator}, introduced by Moreau \cite{moreau1965proximite}, serves as a generalisation of the gradient step for such functionals and is a fundamental building block for many efficient first-order algorithms.
+
+\begin{defi}[Proximal operator (Recall)]\label{def:prox_operator_recap}\normalfont
+As defined in Definition \ref{def:prox_operator}, let $\mathcal{U}$ be a Hilbert space and $J \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper, lower semi-continuous (l.s.c.), and convex functional. The \textbf{proximal operator} of $J$, denoted by $\operatorname{prox}_{J}$, is the mapping $\operatorname{prox}_{J} \colon \mathcal{U} \to \mathcal{U}$ defined by
+\begin{align*}
+\operatorname{prox}_{J}(v) &:= \argmin_{u \in \mathcal{U}} \left\{ \frac12 \|u - v\|_{\mathcal{U}}^2 + J(u) \right\} \, .
+\end{align*}
+\end{defi}
+
+\noindent Since $J$ is proper, convex, and l.s.c., and the quadratic term $\frac12 \|u - v\|_{\mathcal{U}}^2$ is strongly convex and coercive, the objective function in \eqref{eq:prox} is strongly convex. This guarantees that the minimiser exists and is unique, ensuring that the proximal operator is well-defined.
+
+The proximal operator finds a point $u$ that balances minimising the functional $J(u)$ and staying close to the input $v$. It is a generalisation of the orthogonal projection.
+
+\begin{exm}[Projection]\normalfont
+Let $\mathcal{C} \subset \mathcal{U}$ be a non-empty, closed, convex set, and let $J(u) = \chi_{\mathcal{C}}(u)$ be its characteristic function (Definition \ref{def:charfunc}). The proximal operator is
+\begin{align*}
+\operatorname{prox}_{\chi_{\mathcal{C}}}(v) = \argmin_{u \in \mathcal{C}} \frac12 \|u - v\|_{\mathcal{U}}^2 \, ,
+\end{align*}
+which is the orthogonal projection of $v$ onto $\mathcal{C}$, denoted by $P_{\mathcal{C}}(v)$.
+\end{exm}
+
+\subsubsection{Optimality condition and properties}
+The point $u^* = \operatorname{prox}_{J}(v)$ is characterised by the first-order optimality condition (Fermat's rule, cf. Definition \ref{defi:subdiff}), i.e.,
+\begin{align}
+0 \in (u^* - v) + \partial J(u^*) \quad \iff \quad v - u^* \in \partial J(u^*) \, . \label{eq:prox_inclusion}
+\end{align}
+This inclusion shows that the proximal operator can be viewed as the \emph{resolvent} of the subdifferential operator $\partial J$, i.e., $\operatorname{prox}_{J} = (I + \partial J)^{-1}$. This corresponds to an implicit (backward) step with respect to the functional $J$.
+
+A crucial property for the stability and convergence of algorithms using the proximal operator is its continuity.
+
+\begin{prop}[Firm Non-expansiveness]\label{prop:firm_non_expansive}\normalfont
+The proximal operator $\operatorname{prox}_{J}$ is \emph{firmly non-expansive}:
+\begin{align*}
+\|\operatorname{prox}_{J}(v_1) - \operatorname{prox}_{J}(v_2)\|_\mathcal{U}^2 \leq \langle v_1 - v_2, \operatorname{prox}_{J}(v_1) - \operatorname{prox}_{J}(v_2) \rangle_\mathcal{U} \, , \quad \forall v_1, v_2 \in \mathcal{U}.
+\end{align*}
+Consequently, it is also non-expansive (1-Lipschitz continuous), i.e., $\|\operatorname{prox}_{J}(v_1) - \operatorname{prox}_{J}(v_2)\|_\mathcal{U} \leq \|v_1 - v_2\|_\mathcal{U}$, for all arguments.
+\end{prop}
+
+Another fundamental identity is the Moreau decomposition, which relates the proximal operator of a function to that of its convex conjugate $J^*$ (Definition \ref{def:convex_conjugate}).
+
+\begin{thm}[Moreau Decomposition]\label{thm:moreau_decomposition}\normalfont
+For any $v \in \mathcal{U}$ and any $\tau > 0$, the following identity holds:
+\begin{align*}
+v = \operatorname{prox}_{\tau J}(v) + \tau \, \operatorname{prox}_{\tau^{-1} J^*}(v \tau^{-1}) \, .
+\end{align*}
+\end{thm}
+
+\paragraph{Smoothing via Moreau envelopes}
+In the introduction of this chapter, we mentioned ``smoothing the non-smoothness'' as an alternative approach to handling non-differentiable regularisers. The proximal operator provides a canonical, mathematically rigorous way to achieve this via the \emph{Moreau envelope}. For a parameter $\tau > 0$, the Moreau envelope of a functional $J$ is defined as the optimal value of the proximal minimisation problem, i.e.,
+\begin{align*}
+M_{\tau J}(v) := \min_{u \in \mathcal{U}} \left\{ \frac{1}{2\tau}\|u - v\|_{\mathcal{U}}^2 + J(u) \right\} \, .
+\end{align*}
+
+A remarkable property of the Moreau envelope is that even if $J$ is non-smooth (like the $\ell^1$-norm), $M_{\tau J}$ is always continuously differentiable. Furthermore, its gradient is intrinsically linked to the proximal operator, i.e.
+\begin{align*}
+\nabla M_{\tau J}(v) = \frac{1}{\tau} (v - \operatorname{prox}_{\tau J}(v)) \, .
+\end{align*}
+This establishes a profound connection: computing the proximal operator yields the exact gradient of the smoothed functional. This property can be heavily exploited in deep learning, as it allows non-differentiable functions to be replaced by their smooth Moreau envelopes.
+
+\subsubsection{Examples and properties of proximal operators}
+The efficiency of proximal algorithms depends on the ability to compute the proximal operator efficiently, ideally in closed form.
+
+\begin{exm}[$\ell^1$-Norm and Soft Thresholding (Recall)]\label{exm:soft_thresholding}\normalfont
+The most important example for sparse recovery is the $\ell^1$-norm (cf. Example \ref{exm:soft_thresholding_ch2}). Let $\mathcal{U} = \mathbb{R}^n$ and $J(u) = \alpha \|u\|_1 = \alpha \sum_i |u_i|$, with $\alpha > 0$. Since the norm is separable, the proximal operator can be computed component-wise by solving the scalar problem
+\begin{align*}
+\argmin_{x \in \mathbb{R}} \left\{ \frac12 (x - v_i)^2 + \alpha |x| \right\} \, .
+\end{align*}
+The solution is given by the \textbf{Soft Thresholding Operator}, denoted $\mathcal{S}_\alpha(v_i)$. One can derive it using the optimality condition $0 \in (x - v_i) + \alpha \partial |x|$, according to \eqref{eq:prox_inclusion}.
+\begin{enumerate}
+\item If $x > 0$, then $\partial |x| = \{1\}$. The condition is $x - v_i + \alpha = 0$, so $x = v_i - \alpha$. This is valid if $v_i > \alpha$.
+\item If $x < 0$, then $\partial |x| = \{-1\}$. The condition is $x - v_i - \alpha = 0$, so $x = v_i + \alpha$. This is valid if $v_i < -\alpha$.
+\item If $x = 0$, then $\partial |x| = [-1, 1]$. The condition is $0 \in -v_i + \alpha [-1, 1]$, which means $|v_i| \leq \alpha$.
+\end{enumerate}
+Combining these cases, we obtain
+\begin{align*}
+\mathcal{S}_\alpha(v_i) = \begin{cases} v_i - \alpha & \text{if } v_i > \alpha \, , \\ 0 & \text{if } |v_i| \leq \alpha \, , \\ v_i + \alpha & \text{if } v_i < -\alpha \, . \end{cases}
+\end{align*}
+This can be written compactly as $\mathcal{S}_\alpha(v) = \operatorname{sign}(v) \max(0, |v| - \alpha)$.
+\end{exm}
+
+\begin{exm}[Total Variation]\normalfont
+For the Total Variation regulariser (Example \ref{exm:rof_inv}), $J(u) = \alpha \operatorname{TV}(u)$, the proximal operator corresponds to solving the ROF denoising problem:
+\begin{align*}
+\operatorname{prox}_{\alpha\operatorname{TV}}(v) = \argmin_{u} \left\{ \frac12 \|u - v\|_{\mathcal{U}}^2 + \alpha \operatorname{TV}(u) \right\} \, .
+\end{align*}
+While this does not have a closed-form solution, it is a convex problem that can be solved efficiently using iterative methods such as PDHG (as we will see in Section \ref{sec:pdhg}).
+\end{exm}
+
+To build complex neural network layers using proximal operators, we must understand how these operators behave under summation and transformations. Two fundamental calculus rules theoretically justify why proximal operators can be seamlessly integrated into deep learning architectures.
+
+\begin{thm}[Proximal of Separable Functions]\label{thm:prox_separable}\normalfont
+If a functional $J$ is completely separable, meaning $J(u) = \sum_{i=1}^n J_i(u_i)$ for $u \in \mathbb{R}^n$, then its proximal operator can be computed component-wise:
+\begin{align*}
+(\operatorname{prox}_{J}(v))_i = \operatorname{prox}_{J_i}(v_i) \, .
+\end{align*}
+\end{thm}
+This theorem justifies why non-linear activation functions in Proximal Neural Networks (like the Soft Thresholding operator) operate element-wise on feature vectors, mirroring standard feed-forward network activations.
+
+\begin{thm}[Affine Composition]\label{thm:prox_affine}\normalfont
+Let $J \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper, l.s.c., convex functional, and let $A \colon \mathcal{V} \to \mathcal{U}$ be a linear operator satisfying $A A^* = \gamma I$ for some $\gamma > 0$ (e.g., an orthogonal matrix or a tight frame). Then, for any $b \in \mathcal{U}$ we observe
+\begin{align*}
+\operatorname{prox}_{J(A(\cdot) + b)}(v) = v + \frac{1}{\gamma} A^* \left( \operatorname{prox}_{\gamma J}(A v + b) - (A v + b) \right) \, .
+\end{align*}
+\end{thm}
+This property can be utilised in designing unrolled networks with orthogonal transformation. By constraining the learned weight matrices to be orthogonal, the network can execute efficient, analytical proximal steps without requiring computationally expensive matrix inversions.
+
+\subsection{Proximal gradient descent}
+We can utilise the proximal operator \eqref{eq:prox} to devise algorithms for solving composite optimisation problems, which frequently arise in the variational regularisation framework \eqref{eq:var_reg}. We consider the problem
+\begin{align}
+\min_{u \in \mathcal{U}} \{ E(u) := L(u) + S(u) \} \, , \label{eq:composite_optimisation}
+\end{align}
+where we assume that
+\begin{itemize}
+\item $L \colon \mathcal{U} \to \mathbb{R}$ (e.g., the data fidelity term) is convex and continuously differentiable. Furthermore, its gradient $\nabla L$ is Lipschitz continuous with constant $\beta > 0$, i.e., $\| \nabla L(u) - \nabla L(v) \|_{\mathcal{U}} \leq \beta \| u - v \|_{\mathcal{U}}$ for all $u,v \in \mathcal{U}$.
+\item $S \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ (e.g., the regularisation term) is proper, convex, and l.s.c., but potentially non-smooth.
+\end{itemize}
+
+When $S$ is non-smooth, standard gradient descent is inapplicable. The \textbf{Proximal Gradient Descent (PGD)} method, also known as \textbf{Forward-Backward Splitting} \cite{Lions1979Splitting}, handles this by treating the smooth and non-smooth parts separately.
+
+\subsubsection{Derivation}
+The core idea is to iteratively construct a local model of the objective function $E(u)$ around the current iterate $u^k$. We linearise the smooth part $L$ and add a quadratic proximal term to ensure stability and obtain
+\begin{align*}
+u^{k+1} = \argmin_{u \in \mathcal{U}} \left\{ L(u^k) + \langle \nabla L(u^k), u - u^k \rangle_\mathcal{U} + S(u) + \frac{1}{2\tau}\|u - u^k\|_\mathcal{U}^2 \right\} \, ,
+\end{align*}
+where $\tau > 0$ is the step size. By completing the square and dropping constant terms, this simplifies to
+\begin{align*}
+u^{k+1} &= \argmin_{u \in \mathcal{U}} \left\{ \tau S(u) + \frac{1}{2} \|u - (u^k - \tau \nabla L(u^k))\|_\mathcal{U}^2 \right\} \, , \\
+&= \operatorname{prox}_{\tau S}(u^k - \tau \nabla L(u^k)) \, .
+\end{align*}
+With chosen initial guess $u^0$ and step-size $\tau > 0$, this method is summarised in Algorithm \ref{alg:pgd}.
+\begin{algorithm}
+\caption{Proximal Gradient Descent (PGD)}\label{alg:pgd}
+\begin{algorithmic}
+\State \textbf{Input:} Initial guess $u^0$, step size $\tau > 0$.
+\For{$k = 0, 1, 2, \ldots$}
+\State $v^k = u^k - \tau \nabla L(u^k)$ \Comment{Forward (Gradient) Step}
+\State $u^{k+1} = \operatorname{prox}_{\tau S}(v^k)$ \Comment{Backward (Proximal) Step}
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+Let us take a look at a specific example of proximal gradient descent, known as iterative soft-thresholding algorithm.
+
+\begin{exm}[Iterative Soft-Thresholding Algorithm (ISTA)]\label{exm:ista}\normalfont
+Consider the LASSO problem (Example \ref{exm:lasso}): $\min_{u} \frac{1}{2}\|Ku - f^\delta\|_\mathcal{V}^2 + \alpha \|u\|_1$. Here, $L(u) = \frac{1}{2}\|Ku - f^\delta\|_\mathcal{V}^2$ and $S(u) = \alpha \|u\|_1$. The gradient is $\nabla L(u) = K^*(Ku - f^\delta)$, with Lipschitz constant $\beta = \|K\|^2$. The proximal operator of $\tau S$ is the soft-thresholding operator $\mathcal{S}_{\tau\alpha}$ (Example \ref{exm:soft_thresholding}). Applying PGD yields the Iterative Soft-Thresholding Algorithm (ISTA):
+\begin{align*}
+u^{k+1} = \mathcal{S}_{\tau\alpha}(u^k - \tau K^*(Ku^k - f^\delta)) \, .
+\end{align*}
+\end{exm}
+
+\begin{rem}[Connection to Bregman Methods]\normalfont
+As discussed in the literature (e.g., \cite{benning2018modern}), PGD can be interpreted as a Bregman proximal method. If we define the Bregman distance generating function $J(u) = \frac{1}{2\tau}\|u\|_\mathcal{U}^2 - L(u)$, then PGD corresponds to the iteration
+\begin{align*}
+u^{k+1} = \argmin_{u} \{ L(u) + S(u) + D_J(u, u^k) \} \, .
+\end{align*}
+For this interpretation to hold, $J$ must be convex, which is satisfied if $\tau \leq 1/\beta$.
+\end{rem}
+
+\subsubsection{Convergence}
+The convergence of PGD is guaranteed if the step size $\tau$ is chosen appropriately relative to the smoothness of $L$.
+
+\begin{thm}[Convergence of PGD]\label{thm:pgd_convergence}\normalfont
+Under the assumptions stated for \eqref{eq:composite_optimisation}, if a minimiser $u^*$ exists and the step size satisfies $0 < \tau < 2/\beta$, then the sequence $\{u^k\}$ generated by Algorithm \ref{alg:pgd} converges to a minimiser $u^*$. Furthermore, the objective function values converge at a rate of $\mathcal{O}(1/k)$, i.e., $E(u^k) - E(u^\ast) < C / k$ for some constant $C$ independent of $k$, and all $k$.
+\end{thm}
+
+To rigorously measure convergence and stationarity for non-smooth composite problems, we cannot simply track the norm of the gradient $\nabla E(u)$, as $\nabla S$ is undefined. Instead, we utilise the gradient mapping
+\begin{align*}
+G_\tau(u) := \frac{1}{\tau} \left( u - \operatorname{prox}_{\tau S}(u - \tau \nabla L(u)) \right) \, .
+\end{align*}
+A point $u^*$ is a stationary point of the composite problem \eqref{eq:composite_optimisation} if and only if $G_\tau(u^*) = 0$. In the context of unrolled networks, this gradient mapping can serve as a mathematically sound regularisation metric during training, allowing one to explicitly penalise violations of optimality conditions in intermediate network layers.
+
+\paragraph{Strong Convexity and Linear Convergence}
+While Theorem \ref{thm:pgd_convergence} guarantees a sublinear $\mathcal{O}(1/k)$ convergence rate, this rate can be dramatically improved if the objective function possesses additional structural properties. Specifically, if the smooth part $L(u)$ is \emph{strongly convex} with parameter $\mu > 0$, the PGD algorithm achieves \textbf{linear convergence}, i.e.,
+\begin{align*}
+\|u^k - u^*\|_\mathcal{U}^2 \leq \left( 1 - \frac{\mu}{\beta} \right)^k \|u^0 - u^*\|_\mathcal{U}^2 \, .
+\end{align*}
+
+This stark contrast in convergence speeds forms a primary motivation for algorithm unrolling. In many real-world inverse problems in imaging, the forward operators are ill-posed and regularisers (like $\ell^1$ or TV) do \emph{not} yield a strongly convex objective, condemning classical iterative methods to the slow $O(1/k)$ regime. Learned unrolled architectures implicitly aim to overcome this theoretical bottleneck; by training on data, they effectively ``learn'' a transformed geometry that accelerates the convergence behaviour to mirror linear rates empirically.
+
+\subsection{Proximal accelerated gradient descent}
+
+While PGD achieves a convergence rate of $O(1/k)$, this can be slow in practice. Inspired by Nesterov's acceleration techniques for smooth optimisation \cite{Nesterov1983Method}, it is possible to improve the convergence rate to an optimal $O(1/k^2)$. The most prominent adaptation to the proximal setting is the Fast Iterative Shrinkage-Thresholding Algorithm (FISTA) \cite{Beck2009FISTA}.
+
+The key idea is to incorporate \emph{momentum} by evaluating the gradient not at the previous iterate $u^k$, but at an extrapolated point $y^k$ that combines information from the previous two iterates.
+
+\begin{algorithm}
+\caption{Fast Iterative Shrinkage-Thresholding Algorithm (FISTA)}\label{alg:fista}
+\begin{algorithmic}
+\State \textbf{Input:} Initial guess $u^0$. Step size $\tau \in (0, 1/\beta]$. Initialise $y^0 = u^0$, $t_0 = 1$.
+\For{$k = 0, 1, 2, \ldots$}
+\State $u^{k+1} = \operatorname{prox}_{\tau S}(y^k - \tau \nabla L(y^k))$ \Comment{Proximal gradient step at extrapolated point}
+\State $t_{k+1} = \frac{1 + \sqrt{1 + 4t_k^2}}{2}$ \Comment{Update momentum parameter}
+\State $y^{k+1} = u^{k+1} + \left(\frac{t_k - 1}{t_{k+1}}\right) (u^{k+1} - u^k)$ \Comment{Extrapolation step}
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\begin{thm}[Convergence of FISTA]\label{thm:fista_convergence}\normalfont
+Under the same assumptions as Theorem \ref{thm:pgd_convergence}, the sequence $\{u^k\}$ generated by Algorithm \ref{alg:fista} satisfies
+\begin{align*}
+E(u^k) - E(u^*) \leq \frac{2\|u^0 - u^*\|_\mathcal{U}^2}{\tau (k+1)^2} \, .
+\end{align*}
+\end{thm}
+This $O(1/k^2)$ rate provides a significant practical improvement over PGD/ISTA, making FISTA a standard tool for large-scale convex optimisation in imaging.
+
+\subsection{Alternating direction method of multipliers}
+
+The proximal gradient methods are effective when the proximal operator of the entire non-smooth part $S$ is easy to compute. However, many problems involve constraints or composite regularisation functions (e.g., $S(u) = J(Du)$) where the proximal operator is intractable. The Alternating Direction Method of Multipliers (ADMM) \cite{Gabay1983ADMM, Boyd2011ADMM} is a powerful technique designed to split such complex problems into simpler, manageable subproblems.
+
+\subsubsection{Problem Formulation and the Augmented Lagrangian}
+ADMM is typically applied to problems with separable objectives coupled by linear constraints, i.e.,
+\begin{align}
+\min_{x \in \mathbb{R}^n, z \in \mathbb{R}^m} \{ G(x) + F(z) \} \quad \text{subject to} \quad Ax + Bz = c \, . \label{eq:admm_problem}
+\end{align}
+Note that with a characteristic function of the form of Definition \ref{def:charfunc} we can write \eqref{eq:admm_problem} also as
+\begin{align*}
+    \min_{x \in \mathbb{R}^n, z \in \mathbb{R}^m} \{ G(x) + F(z) + \chi_{= c}(Ax + Bz) \} \, ,
+\end{align*}
+where the convex set $\mathcal{C} = \{ w | w = c\}$ ensures that $\chi_{= c}(Ax + Bz)$ enforces the constraint $Ax + Bz = c$. If we replace $\chi_{= c}$ with its convex conjugate as defined in Definition \ref{def:convex_conjugate}, i.e., 
+\begin{align*}
+    \chi_{= c}(Ax + Bz - c) = \sup_{y} \langle y, Ax + Bz - c \rangle - \chi^\ast_{= c}(y) = \sup_{y} \langle y, Ax + Bz - c \rangle \, ,
+\end{align*}
+we can obtain the solution of \eqref{eq:admm_problem} as a saddle-point of the \textbf{Lagrangian}
+\begin{align*}
+    \mathcal{L}(x, z; y) = G(x) + F(z) + \langle y, Ax + Bz - c \rangle \, ,
+\end{align*}
+where $y$ is the Lagrange multiplier (dual variable). In contrast, ADMM utilises the \textbf{Augmented Lagrangian} $\mathcal{L}_\delta(x, z; y)$, which adds a quadratic penalty term to the standard Lagrangian and reads
+\begin{align*}
+\mathcal{L}_\delta(x, z; y) := G(x) + F(z) + \langle y, Ax + Bz - c \rangle + \frac{\delta}{2}\|Ax + Bz - c\|^2 \, ,
+\end{align*}
+and where $\delta > 0$ is the penalty parameter.
+
+\subsubsection{The ADMM Algorithm}
+ADMM solves for the saddle point of $\mathcal{L}_\delta$ by alternating the minimisation over $x$ and $z$, followed by a dual ascent step on $y$. This is summarised in Algorithm \ref{alg:admm}.
+
+\begin{algorithm}
+\caption{Alternating Direction Method of Multipliers (ADMM)}\label{alg:admm}
+\begin{algorithmic}
+\State \textbf{Input:} Initial guesses $z^0, y^0$, penalty parameter $\delta > 0$.
+\For{$k = 0, 1, 2, \ldots$}
+\State $x^{k+1} = \argmin_{x} \mathcal{L}_\delta(x, z^k; y^k)$ \Comment{x-minimisation}
+\State $z^{k+1} = \argmin_{z} \mathcal{L}_\delta(x^{k+1}, z; y^k)$ \Comment{z-minimisation}
+\State $y^{k+1} = y^k + \delta (Ax^{k+1} + Bz^{k+1} - c)$ \Comment{Dual ascent}
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+The key advantage is that the subproblems for $x$ and $z$ decouple the functions $G$ and $F$, often resulting in simpler optimisation problems or proximal steps.
+
+\begin{exm}[Total Variation Denoising via ADMM (Split Bregman)]\normalfont
+Consider the ROF model $\min_{u} \frac{1}{2}\|u - f^\delta\|^2 + \alpha \operatorname{TV}(u)$. We introduce a splitting variable $z = \nabla u$ (where $\nabla$ is a discretisation of the gradient operator) and reformulate the ROF model to
+\begin{align*}
+\min_{u, z} \left\{ \frac{1}{2}\|u - f^\delta\|^2 + \alpha \|z\|_1 \right\} \quad \text{subject to} \quad \nabla u - z = 0 \, .
+\end{align*}
+Then the ADMM iterations (using the scaled dual variable $v = y/\delta$) are
+\begin{enumerate}
+\item $u^{k+1} = \argmin_{u} \left\{ \frac{1}{2}\|u - f^\delta\|^2 + \frac{\delta}{2} \|\nabla u - z^k + v^k\|^2 \right\}$. This is a smooth quadratic problem, requiring the solution of the linear system (a screened Poisson equation) $(I - \delta \Delta)u = f^\delta + \delta \nabla^\top(z^k - v^k)$.
+\item $z^{k+1} = \argmin_z \left\{ \alpha \|z\|_1 + \frac{\delta}{2} \|\nabla u^{k+1} - z + v^k\|^2 \right\}$. This is the soft-thresholding operator, hence $z^{k+1} = \mathcal{S}_{\alpha/\delta}(\nabla u^{k+1} + v^k)$.
+\item $v^{k+1} = v^k + \nabla u^{k+1} - z^{k+1}$.
+\end{enumerate}
+This specific application of ADMM to the ROF model is also known as the Split Bregman method \cite{goldstein2009split}.
+\end{exm}
+
+\subsubsection{Preconditioned ADMM}
+While ADMM effectively decouples complex variables, the $x$-minimisation step (i.e., $x^{k+1} = \argmin_{x} \mathcal{L}_\delta(x, z^k; y^k)$) frequently requires solving a linear system due to the presence of the operator $A$. Matrix inversions are prohibitively expensive for large-scale imaging problems, and they are notoriously difficult to backpropagate through efficiently during neural network training. 
+
+To circumvent this, we can replace the exact $x$-minimisation with a linearised approximation of the quadratic penalty term, augmented by a proximal stabilisation term as proposed in \cite{zhang2011unified}. There, we replace the steps in Algorithm \ref{alg:admm} with in Algorithm \ref{alg:padmm}:
+\begin{algorithm}
+\caption{Preconditioned Alternating Direction Method of Multipliers (ADMM)}\label{alg:padmm}
+\begin{algorithmic}
+\State \textbf{Input:} Initial guesses $z^0, y^0$, penalty parameter $\delta > 0$.
+\For{$k = 0, 1, 2, \ldots$}
+\State $x^{k+1} = \argmin_{x} \mathcal{L}_\delta(x, z^k; y^k) + \frac12 \| x - x^k \|^2_{Q_1}$ \Comment{x-minimisation}
+\State $z^{k+1} = \argmin_{z} \mathcal{L}_\delta(x^{k+1}, z; y^k) + \frac12 \| z - z^k \|^2_{Q_2}$ \Comment{z-minimisation}
+\State $y^{k+1} = y^k + \delta (Ax^{k+1} + Bz^{k+1} - c)$ \Comment{Dual ascent}
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+Here, $\| \cdot \|_Q := \sqrt{\langle Q \cdot, \cdot\rangle}$. For example, if we choose $Q_1 := \frac{1}{\tau} I - \delta A^\top A$ and $Q_2 := \frac{1}{\sigma} I - \delta B^\top B$, we obtain the updates
+\begin{align*}
+    x^{k+1} &= \operatorname{prox}_{\tau G} \left( x^k - \tau A^\top (y^k + \delta (A x^k + B z^k - c)) \right) \, , \\
+    z^{k+1} &= \operatorname{prox}_{\sigma F} \left( z^k - \sigma B^\top (y^k + \delta (A x^{k+1} + B z^k - c)) \right) \, , \\
+    y^{k + 1} &= y^k + \delta (A x^{k + 1} + B^{k + 1} - c) \, .
+\end{align*}
+These linearised steps require only simple matrix-vector multiplications ($A^\top$ and $A$, respectively $B^\top$ and $B$). Consequently, many deep learning architectures termed ``Unrolled ADMM'' inherently implement this linearised variant. It guarantees that all layers remain computationally efficient, fully differentiable, and strictly feed-forward without the need for embedded linear solvers. Please that for $Q_1$ and $Q_2$ to be positive definite, we require $\tau < 1/\| A^\top A \|$ and $\sigma < 1/\| B^\top B \|$.
+
+\subsection{Primal-dual hybrid gradient method}\label{sec:pdhg}
+
+The Primal-Dual Hybrid Gradient (PDHG) method, particularly the variant popularised by Chambolle and Pock \cite{Chambolle2011PDHG, Pock2009PDHG}, is a versatile first-order method for solving saddle-point problems arising in imaging. Similar to preconditioned ADMM, it is often preferred over ADMM when the subproblems in ADMM involve solving difficult linear systems.
+
+\noindent We consider the general convex optimisation problem
+\begin{align*}
+\min_{u \in \mathcal{U}} \{ G(u) + F(Ku) \} \, .
+\end{align*}
+PDHG addresses this by solving the corresponding Fenchel-Rockafellar saddle-point formulation
+\begin{align}
+\min_{u \in \mathcal{U}} \sup_{y \in \mathcal{V}} \{ G(u) + \langle Ku, y \rangle_\mathcal{V} - F^*(y) \} \, , \label{eq:pdhg_saddle_point}
+\end{align}
+where we have replaced $F(Ku)$ with $F(Ku) = \sup_{y \in \mathcal{V}} \langle y, Ku \rangle_{\mathcal{V}} - F^\ast(y)$.
+
+The PDHG algorithm simultaneously updates the primal variable $u$ and the dual variable $y$ using proximal steps, combined with an extrapolation step on the variable involved in the coupling term, and can be derived from the optimality system of \eqref{eq:pdhg_saddle_point}, which reads
+\begin{align*}
+    \begin{pmatrix}
+        0\\ 0
+    \end{pmatrix} \in \begin{pmatrix}
+        \partial G(u^\ast) + K^\ast y^\ast \\ \partial F^\ast(y^\ast) - Ku^\ast
+    \end{pmatrix} \, . 
+\end{align*}
+As detailed in the literature (e.g., \cite{benning2018modern}), the PDHG algorithm is now derived by replacing the point of optimality $(u^\ast, y^\ast)$ with iterates $(u^k, y^k)$, and by adding the gradient of a Bregman distance term $D_J$ evaluated at the arguments $(u^k, y^k)$ and $(u^{k - 1}, y^{k - 1})$, i.e.,
+\begin{align*}
+    \begin{pmatrix}
+        0\\ 0
+    \end{pmatrix} \in \begin{pmatrix}
+        \partial G(u^k) + K^\ast y^k \\ \partial F^\ast(y^k) - Ku^k
+    \end{pmatrix} + \{ \nabla J(u^k, y^k) - \nabla J(u^{k - 1}, y^{k - 1}) \} \, . 
+\end{align*}
+If we choose $J(u, y) = \frac{1}{2\tau} \| u \|^2_{\mathcal{U}} + \frac{1}{2\sigma} \| y \|^2_{\mathcal{V}} - \langle Ku, y \rangle_{\mathcal{V}}$, then we obtain the iterates described in Algorithm \ref{alg:pdhg_alt}.
+\begin{algorithm}
+\caption{Primal-Dual Hybrid Gradient (PDHG) / Chambolle-Pock}\label{alg:pdhg_alt}
+\begin{algorithmic}
+\State \textbf{Input:} Initial guesses $u^0, y^0$. Step sizes $\tau > 0, \sigma > 0$. Initialise $\bar{u}^0 = y^0$.
+\For{$k = 0, 1, 2, \ldots$}
+\State $u^{k+1} = \operatorname{prox}_{\tau G}(u^k - \tau K^* y^{k})$ \Comment{Primal update}
+\State $\bar{u}^{k+1} = 2 u^{k+1} - u^k$ \Comment{Extrapolation}
+\State $y^{k+1} = \operatorname{prox}_{\sigma F^*}(y^k + \sigma K \bar{u}^{k + 1})$ \Comment{Dual update}
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+In \cite{Chambolle2011PDHG}, the order of updates is swapped compared to Algorithm \ref{alg:pdhg_alt} and the PDHG method features a more general extrapolation step with a variable $\theta$. This slightly more general variant is summarised in Algorithm \ref{alg:pdhg}.
+\begin{algorithm}
+\caption{Primal-Dual Hybrid Gradient (PDHG) / Chambolle-Pock -- General Extrapolation}\label{alg:pdhg}
+\begin{algorithmic}
+\State \textbf{Input:} Initial guesses $u^0, y^0$. Step sizes $\tau > 0, \sigma > 0$. Initialise $\bar{u}^0 = u^0$.
+\For{$k = 0, 1, 2, \ldots$}
+\State $y^{k+1} = \operatorname{prox}_{\sigma F^*}(y^k + \sigma K \bar{u}^k)$ \Comment{Dual update}
+\State $u^{k+1} = \operatorname{prox}_{\tau G}(u^k - \tau K^* y^{k+1})$ \Comment{Primal update}
+\State $\bar{u}^{k+1} = u^{k+1} + \theta (u^{k+1} - u^k)$ \Comment{Extrapolation ($\theta=1$ typically)}
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Convergence and Interpretation}
+The convergence of PDHG is guaranteed provided the step sizes satisfy the condition
+\begin{align*}
+\tau \sigma \|K\|^2 < 1 \, .
+\end{align*}
+
+PDHG can be interpreted as a preconditioned proximal point algorithm. As we have seen earlier, the PDHG iteration can be derived as a fixed-point iteration involving a specific Bregman distance $D_J$. This distance is generated by a quadratic function $J$ that can also be written as $J(u, y) = \frac{1}{2}\|(u, y)^\top\|_M^2$, where the operator $M$ is defined as
+\begin{align*}
+M = \begin{pmatrix} \frac{1}{\tau}I & -K^* \\ -K & \frac{1}{\sigma}I \end{pmatrix} \, .
+\end{align*}
+The convergence condition $\tau \sigma \|K\|^2 < 1$ ensures that $M$ is positive definite, making $J$ strongly convex and guaranteeing the convergence of the iterates to a saddle point.
+
+PDHG is highly effective because it only requires the application of the operator $K$ and its adjoint $K^*$, and the proximal operators of $G$ and $F^*$ (which, by Moreau decomposition (Theorem \ref{thm:moreau_decomposition}), can be computed via the proximal operator of $F$). It avoids the inversion of operators often required in ADMM.
+
+\section{Algorithm unrolling}
+We have presented several algorithms for the computation of model-based (mostly variational) regularisation methods, and you may ask yourselves: what does this have to do with learning? An interesting observation that some (or even many) of you may already have made at this point is that all of the algorithms presented look like neural network architectures. They often consist of linear or affine-linear transformations, followed by nonlinear activation functions in form of proximal maps. Let's take Example \ref{exm:ista}. For a fixed number of iterations, input $f^\delta$ and fixed $u_0$, each update is of the form
+\begin{align*}
+    u^k = \sigma( B u^{k - 1} + d ) \, ,
+\end{align*}
+for $B := (I - \tau K^* K)$, $d := \tau K^* f^\delta$ and $\sigma = \mathcal{S}_{\tau \alpha}$. This effectively resembles an MLP, respectively a feed-forward neural network as introduced in Section \ref{sec:mlp}, with the difference that the bias feeds the input data into each layer of the network. In the following section we use this as a baseline for a learnable architecture, followed by sections on learned primal dual methods and general proximal neural networks.
+
+\subsection{Learned iterative soft-thresholding algorithm}\label{sec:lista}
+As the name suggests, the key idea behind the Learned Iterative Soft-Thresholding Algorithm (LISTA), introduced in \cite{gregor2010learning}, in contrast to ISTA is to unroll the ISTA algorithm for a fixed number of iterations, and to make its fixed matrices or operators learnable parameters. Getting back to the architecture in Example \ref{exm:ista}, i.e.
+\begin{align*}
+u^k = \mathcal{S}_{\tau \alpha}( \tau K^* f^\delta + (I - \tau K^* K) u^{k - 1} ) \, ,
+\end{align*}
+we replace the recurrent weights $S := (I - \tau K^* K)$, the input weights $B := \tau K^*$ and also the threshold $\gamma := \tau \alpha > 0$ with learnable parameters $S_k$, $B_k$ and $\gamma_k$ that can vary per iteration (layer) $k$. This results in the neural network architecture
+\begin{align*}
+u^k = \mathcal{S}_{\gamma_k}\left( B_k f^\delta + S_k u^{k - 1} \right) , \qquad \forall \, k \in \{1, \ldots, K\} \, ,
+\end{align*}
+for a fixed number of layers $K$ and some initial $u^0$ (often set to zero). The network output is $u^K$. Note that these learnable operators can be chosen as fully-connected layers (i.e. dense matrices), convolutions, or other operations representing linear operators.
+
+This approach can be generalised beyond the standard LASSO formulation to scenarios where the signal is sparse in a transformed domain, often formulated via a synthesis approach.
+
+\begin{exm}[LISTA for Sparse Synthesis with Learned Transform]\label{exm:lista_synthesis}\normalfont
+Consider the sparse synthesis optimisation problem (cf. Section \ref{sec:dict_learning}), where we assume the signal $u$ is synthesised from a sparse code $\xi \in \mathbb{R}^S$ via a dictionary $L \in \mathbb{R}^{n \times S}$, i.e., $u = L\xi$. We aim to find the sparse code by solving
+\begin{align}
+\min_{\xi\in \mathbb{R}^S} \left\{ \frac12 \| K L \xi - f^\delta \|^2 + \alpha \| \xi \|_1 \right\} \, . \label{eq:sparse_synthesis}
+\end{align}
+The ISTA algorithm (Example \ref{exm:ista}) applied to this problem yields the iteration (assuming real spaces for simplicity, so $L^*=L^\top$)
+\begin{align}
+\xi^{k+1} = \mathcal{S}_{\tau\alpha} \Big( (I - \tau L^\top K^* K L) \xi^k + \tau L^\top K^* f^\delta \Big) \, . \label{eq:ista_synthesis}
+\end{align}
+In the spirit of LISTA, we can unroll this iteration and learn the parameters. Crucially, instead of using a fixed dictionary $L$, the dictionary itself can be learned and allowed to vary across layers. One approach is to maintain the structure of the iteration but learn the dictionaries $\{L_k\}$, step sizes $\{\tau_k\}$, and thresholds $\{\gamma_k = \tau_k\alpha_k\}$, i.e.,
+\begin{align*}
+\xi^{k+1} = \mathcal{S}_{\gamma_k} \Big( (I - \tau_k L_k^\top K^* K L_k) \xi^k + \tau_k L_k^\top K^* f^\delta \Big) \, .
+\end{align*}
+This allows the network to learn the optimal sparsifying transform $L_k$ adapted to the data distribution at each iteration.
+
+A common simplification, used in the original LISTA paper \cite{gregor2010learning}, is to replace the structured matrices derived from $L_k$ with unstructured learnable matrices $S_k$ (recurrent weights) and $B_k$ (input weights), which yields
+\begin{align*}
+\xi^{k+1} = \mathcal{S}_{\gamma_k} \Big( S_k \xi^k + B_k f^\delta \Big) \, .
+\end{align*}
+The final signal is usually reconstructed using a learned synthesis dictionary $L_K$, i.e., $u^K = L_K \xi^K$.
+\end{exm}
+Various adaptations of LISTA have been proposed, including accelerated LISTA (based on FISTA, Algorithm \ref{alg:fista}) and extensions using coordinate descent updates.
+
+\subsection{Learned Condat-V\~u}
+
+While LISTA is derived from proximal gradient descent (ISTA/PGD), many inverse problems involve complex regularisers or constraints where primal-dual algorithms (Section \ref{sec:pdhg}) are more suitable. Unrolling these algorithms leads to architectures like the Learned Primal-Dual (LPD) network \cite{adler2018learned}. We consider the analysis formulation, often used in imaging, which reads
+\begin{align}
+\min_{u \in C} \left\{ \frac12 \|K u - f^\delta\|_{\mathcal{V}}^2 + \alpha \|L u\|_1 \right\} \, ,\label{eq:analysis_formulation}
+\end{align}
+where $L$ is an analysis operator (e.g., the gradient or a wavelet transform) and $C \subseteq \mathcal{U}$ is a convex constraint set for which the projection $P_C$ is easy to compute (e.g., intensities $u$ constrained to a fixed interval such as $[0, 1]^n$).
+
+A suitable algorithm for this structure is the Condat-V\~u primal-dual algorithm \cite{condat2013primal, vu2013splitting}, which is the PDHG algorithm if one further subtracts the data fidelity term from the Bregman function $J$. It therefore handles the smooth data fidelity term explicitly, and the iteration reads
+\begin{subequations}\label{algo:pdcv}
+\begin{align}
+y^{k+1} &= P_{[-\alpha,+\alpha]}(y^k + \sigma L u^k) \, , \\
+u^{k+1} &= P_C\left(u^k - \tau \nabla F(u^k) - \tau L^* (2 y^{k+1} - y^k)\right) \, ,
+\end{align}
+\end{subequations}
+where $y$ is the dual variable, $\sigma, \tau > 0$ are step sizes, $P_{[-\alpha,+\alpha]}$ is the projection onto the $\ell^\infty$-ball of radius $\alpha$, and $\nabla F(u) = K^*(Ku - f^\delta)$ is the gradient of the data fidelity term. Expanding the gradient term, the primal update corresponds to
+\begin{align*}
+u^{k+1} = P_C \left( (I - \tau K^* K)u^k + \tau K^* f^\delta - \tau L^* (2 y^{k+1} - y^k) \right) \, .
+\end{align*}
+
+The Learned Primal-Dual architecture \cite{adler2018learned, jiu2021deep} is constructed by unrolling this iterative scheme for a fixed number of iterations $K$. The operators $K, L$, the parameters $\tau, \sigma, \alpha$, and even the proximal operators (projections) can be replaced by learnable components. For instance, the linear operators might be replaced by convolutional operators, and the simple projections might be replaced by more complex learned proximal operators. By learning these components from data, the LPD network can adapt to the specific characteristics of the signal and noise, often outperforming classical iterative methods significantly.
+
+\subsection{Learned Primal-Dual (LPD)}
+
+While LISTA (Section \ref{sec:lista}) focuses on unrolling proximal gradient descent (ISTA/PGD), many challenging inverse problems, particularly those involving complex operators or constraints (like tomography), are more effectively solved using primal-dual algorithms. The Primal-Dual Hybrid Gradient (PDHG) method (Algorithm \ref{alg:pdhg}) is a robust and versatile approach for these scenarios. Unrolling the PDHG algorithm leads to the \textbf{Learned Primal-Dual (LPD)} architecture, introduced by Adler and {\"O}ktem \cite{adler2018learned}. This framework represents a significant step in integrating model-based knowledge (the forward operator) with data-driven learning within a deep network architecture.
+
+\subsubsection{From PDHG to Learned PDHG}
+Recall the PDHG algorithm (Algorithm \ref{alg:pdhg}) designed to solve the saddle-point problem \eqref{eq:pdhg_saddle_point}. The iterations involve alternating proximal steps on the dual ($y$) and primal ($u$) variables
+\begin{subequations}\label{eq:pdhg_recap}
+\begin{align}
+y^{k+1} &= \operatorname{prox}_{\sigma F^*}(y^k + \sigma K \bar{u}^k) \, , \\
+u^{k+1} &= \operatorname{prox}_{\tau G}(u^k - \tau K^* y^{k+1}) \, , \\
+\bar{u}^{k+1} &= u^{k+1} + \theta (u^{k+1} - u^k) \, .
+\end{align}
+\end{subequations}
+
+The foundational idea, similar to LISTA, is to unroll this iterative scheme for a fixed number of iterations $K$ and replace the fixed components with learnable operators. The initial step, often referred to as \textbf{Learned PDHG}, involves replacing the proximal operators $\operatorname{prox}_{\sigma F^*}$ and $\operatorname{prox}_{\tau G}$ with parametrised operators $\Gamma_{\theta_k^d}$ (dual update) and $\Lambda_{\theta_k^p}$ (primal update). These operators are typically implemented as Convolutional Neural Networks (CNNs). The iterates are summarised in Algorithm \ref{alg:learned_pdhg_conceptual}.
+
+\begin{algorithm}[H]
+\caption{Learned PDHG (Conceptual)}\label{alg:learned_pdhg_conceptual}
+\begin{algorithmic}
+\State \textbf{Input:} Initial guesses $u^0, y^0$. Parameters $\Theta$.
+\For{$k = 0, \dots, K-1$}
+\State $y^{k+1} = \Gamma_{\theta_k^d}(y^k + \sigma_k K \bar{u}^k)$
+\State $u^{k+1} = \Lambda_{\theta_k^p}(u^k - \tau_k K^* y^{k+1})$
+\State $\bar{u}^{k+1} = u^{k+1} + \theta_k (u^{k+1} - u^k)$
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+This approach retains the structure of the optimisation algorithm but learns the optimal way to perform the regularisation steps (the proximals) from data. However, as noted in \cite{adler2018learned}, this direct replacement often yields only limited improvements over traditional methods. To achieve state-of-the-art performance, further modifications inspired by deep learning architectures are necessary.
+
+\subsubsection{The Learned Primal-Dual (LPD) Architecture}
+
+The full LPD architecture introduces several crucial generalisations beyond the conceptual Learned PDHG. These modifications significantly enhance the network's capacity and flexibility.
+
+\paragraph{1. Memory (Hidden States)}
+Classical first-order algorithms like PDHG have limited memory, typically relying only on the current iterate and the previous one for extrapolation. LPD overcomes this limitation by expanding the primal and dual spaces to include multiple channels. We denote the multi-channel states using bold letters:
+\begin{align*}
+    \mathbf{u}^k \in \mathcal{U}^{N_p} \quad \text{and} \quad \mathbf{h}^k \in \mathcal{V}^{N_d} \, ,
+\end{align*}
+where $N_p$ and $N_d$ are the number of primal and dual channels (hyperparameters). The state variables $\mathbf{u}^k$ and $\mathbf{h}^k$ now represent vectors of feature maps. One channel (e.g., the first channel, $(\mathbf{u}^k)_1$) usually represents the current reconstruction estimate, while the other channels serve as hidden states or memory, allowing the network to carry richer information across iterations, akin to Recurrent Neural Networks (RNNs).
+
+\paragraph{2. Generalised Updates and Learned Combination Logic}
+In PDHG, the updates follow a strict additive structure, such as $y^k + \sigma K \bar{u}^k$. LPD relaxes this constraint. The learned operators ($\Gamma$ and $\Lambda$) are given the previous state and the operator evaluation as separate inputs, allowing the CNN to learn the optimal, potentially non-linear, way to combine them. This replaces the fixed step sizes ($\sigma, \tau$) and the rigid additive combination.
+
+\paragraph{3. Learned Evaluation Points and Data Consistency}
+Instead of using the extrapolated variable $\bar{u}^k$ for the forward operator evaluation, LPD allows the network to choose which channel(s) of the expanded primal state to use. Typically, the forward operator $K$ is applied to the primary reconstruction channel $(\mathbf{u}^k)_1$, and the adjoint $K^*$ is applied to the primary dual channel $(\mathbf{h}^k)_1$. Furthermore, to ensure the dual update remains aware of the measurements, the data $f^\delta$ is explicitly provided as an input to the dual operator $\Gamma$.
+
+\subsubsection{The LPD Algorithm}
+Incorporating these modifications leads to the full LPD Algorithm \ref{alg:lpd}.
+
+\begin{algorithm}
+\caption{Learned Primal-Dual (LPD)}\label{alg:lpd}
+\begin{algorithmic}
+\State \textbf{Input:} Data $f^\delta$. Initialise states $\mathbf{u}^0 \in \mathcal{U}^{N_p}, \mathbf{h}^0 \in \mathcal{V}^{N_d}$. Parameters $\Theta = \{ \theta_k^d, \theta_k^p \}_{k=0}^{K-1}$.
+\For{$k = 0, \dots, K-1$}
+\State $\text{eval}_\text{u} = K ((\mathbf{u}^k)_1)$
+\State $\mathbf{h}^{k+1} = \Gamma_{\theta_k^d}(\mathbf{h}^k, \text{eval}_\text{u}, f^\delta)$ \Comment{Dual Update (Data Space)}
+\State $\text{eval}_\text{h} = K^* ((\mathbf{h}^{k+1})_1)$
+\State $\mathbf{u}^{k+1} = \Lambda_{\theta_k^p}(\mathbf{u}^k, \text{eval}_\text{h})$ \Comment{Primal Update (Image Space)}
+\EndFor
+\State \textbf{Output:} Reconstruction $u^K = (\mathbf{u}^K)_1$.
+\end{algorithmic}
+\end{algorithm}
+
+\begin{rem}[Initialisation]\normalfont
+The algorithm requires initialisation of the states $\mathbf{u}^0$ and $\mathbf{h}^0$. While one could use an initial reconstruction (e.g., $\mathbf{u}^0 = [K^\dagger f^\delta, \dots]^\top$), Adler and {\"O}ktem found that zero initialisation ($\mathbf{u}^0 = 0, \mathbf{h}^0 = 0$) works equally well and simplifies the architecture by not requiring an explicit pseudo-inverse computation \cite{adler2018learned}.
+\end{rem}
+
+\begin{figure}[h]
+    \centering
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[
+    node distance=2.5cm and 2cm,
+    >=stealth,
+    thick,
+    % Define Styles
+    state/.style={
+        rectangle, 
+        draw=blue!60!black, 
+        fill=blue!5, 
+        minimum height=1cm, 
+        minimum width=1.2cm, 
+        rounded corners=2pt,
+        font=\bfseries
+    },
+    update/.style={
+        rectangle, 
+        draw=red!60!black, 
+        fill=red!5, 
+        minimum height=1.2cm, 
+        minimum width=1.8cm, 
+        rounded corners=2pt,
+        align=center,
+        font=\small
+    },
+    operator/.style={
+        circle, 
+        draw=green!60!black, 
+        fill=green!5, 
+        minimum size=1cm,
+        font=\itshape
+    },
+    data/.style={
+        rectangle,
+        draw=gray!80,
+        fill=gray!10,
+        minimum size=0.8cm,
+        rounded corners
+    },
+    skip line/.style={
+        ->, 
+        draw=black!70, 
+        dashed
+    }
+]
+
+    % --- Grid Layout Strategy ---
+    % Row 1: Data
+    % Row 2: Dual State (h) & Dual Update (Gamma)
+    % Row 3: Physical Operators (K, K*) - Bridge Layer
+    % Row 4: Primal State (u) & Primal Update (Lambda)
+
+    % --- 1. Initial States ---
+    \node[state] (hk) {$\mathbf{h}^k$};
+    \node[state, below=3cm of hk] (uk) {$\mathbf{u}^k$};
+
+    % --- 2. Dual Update Block ---
+    % Gamma is to the right of hk
+    \node[update, right=2.5cm of hk] (Gamma) {$\Gamma_{\theta_k^d}$};
+    
+    % K operator takes input from u_k (bottom) and feeds Gamma (top)
+    % Positioned "between" the columns of states and updates
+    \node[operator] (K) at ($(hk)!0.5!(Gamma) + (0, -1.5)$) {$K$};
+    
+    % Data input
+    \node[data, above=1cm of Gamma] (f) {$f^\delta$};
+
+    % --- 3. Intermediate Dual State ---
+    % The output of Gamma is h^{k+1}
+    \node[state, right=2.5cm of Gamma] (hk1) {$\mathbf{h}^{k+1}$};
+
+    % --- 4. Primal Update Block ---
+    % Lambda uses u^k and h^{k+1}
+    % Positioned to the right of u^k, aligned under hk1 roughly
+    \node[update] (Lambda) at (hk1 |- uk) {$\Lambda_{\theta_k^p}$};
+    
+    % K* operator takes input from h^{k+1} (top) and feeds Lambda (bottom)
+    \node[operator] (Kadj) at ($(hk1)!0.5!(Lambda) + (0, -0.0)$) {$K^*$};
+
+    % --- 5. Final Primal State ---
+    \node[state, right=2.5cm of Lambda] (uk1) {$\mathbf{u}^{k+1}$};
+
+    % --- CONNECTIONS ---
+
+    % 1. u_k feeds K
+    \draw[->] (uk) -| node[pos=0.2, above, font=\tiny] {$(1)$} (K);
+    
+    % 2. K feeds Gamma
+    \draw[->] (K) -- node[midway, right, font=\tiny] {$\text{eval}_u$} (Gamma.south west);
+    
+    % 3. h_k feeds Gamma
+    \draw[->] (hk) -- (Gamma);
+    
+    % 4. Data feeds Gamma
+    \draw[->] (f) -- (Gamma);
+    
+    % 5. Gamma produces h^{k+1}
+    \draw[->] (Gamma) -- (hk1);
+
+    % 6. h^{k+1} feeds K*
+    \draw[->] (hk1) -- node[midway, right, font=\tiny] {$(1)$} (Kadj);
+
+    % 7. K* feeds Lambda
+    \draw[->] (Kadj) -- node[midway, right, font=\tiny] {$\text{eval}_h$} (Lambda.north west);
+
+    % 8. u_k feeds Lambda (The Long Skip Connection)
+    % We route this under the K operator to avoid crossing the line from u_k to K
+    \draw[skip line] (uk.south) -- ++(0,-0.6) -| ($(Lambda.south west) + (-0.3, 0)$) -- (Lambda.south west);
+
+    % 9. Lambda produces u^{k+1}
+    \draw[->] (Lambda) -- (uk1);
+
+    % --- Labels for Lanes ---
+    \node[anchor=east, blue!50!black, font=\bfseries\small] at ($(hk.west) + (-0.5, 0)$) {Dual Space $\mathcal{V}$};
+    \node[anchor=east, blue!50!black, font=\bfseries\small] at ($(uk.west) + (-0.5, 0)$) {Primal Space $\mathcal{U}$};
+
+    \end{tikzpicture}%
+    }
+    \caption{Diagram of a single iteration (layer $k$) of the Learned Primal-Dual architecture. The physical model operators ($K, K^*$) connect the primal and dual states, while the learned CNN operators ($\Gamma, \Lambda$) perform the updates.}
+    \label{fig:lpd_diagram}
+\end{figure}
+
+\subsubsection{Architecture of the Learned Operators}
+
+The power of the LPD framework relies on the implementation of the operators $\Gamma_{\theta_k^d}$ and $\Lambda_{\theta_k^p}$ using CNNs. These networks learn to perform the updates optimally based on the training data.
+
+The inputs to these CNNs are formed by concatenating the respective inputs along the channel dimension. For instance, the dual operator $\Gamma_{\theta_k^d}$ takes an input tensor with $N_d + 1 + 1$ channels (corresponding to $\mathbf{h}^k$, $K((\mathbf{u}^k)_1)$, and $f^\delta$).
+
+A typical architecture for these operators, as used in \cite{adler2018learned}, is a shallow CNN, for example, consisting of 3 convolutional layers. Each layer might use $3\times 3$ kernels and a fixed number of filters (e.g., 32), followed by ReLU activation functions, except for the final layer which is linear to produce the output state.
+
+\subsubsection{LPD as a Generalisation of Variational Methods}
+
+A significant theoretical insight provided in \cite{adler2018learned} is that the LPD architecture is sufficiently expressive to encompass a wide range of classical optimisation algorithms as special cases.
+
+\begin{exm}[LPD specialisation to PDHG]\normalfont
+We can recover the classical PDHG algorithm (Algorithm \ref{alg:pdhg}) from the LPD architecture (Algorithm \ref{alg:lpd}) by carefully selecting the number of channels and defining the learned operators $\Gamma$ and $\Lambda$ to implement the specific proximal maps and affine linear update steps.
+
+Let $N_p=2$ and $N_d=1$. Let the primal state be $\mathbf{u} = [u^{(1)}, u^{(2)}]^\top$, where $u^{(1)}$ corresponds to the primal variable $u$ and $u^{(2)}$ corresponds to the extrapolated variable $\bar{u}$. Let the dual state be $\mathbf{h} = [h^{(1)}]$.
+
+If the learned operators $\Gamma$ and $\Lambda$ are defined to exactly implement the proximal steps and the linear combination/extrapolation steps of PDHG (with specific $\sigma, \tau, \theta$), the LPD iteration perfectly mimics PDHG.
+\end{exm}
+
+Since CNNs are universal approximators, they can learn to approximate these classical updates (including proximal mappings and linear operations) arbitrarily well. Similarly, it can be shown that gradient descent and even more advanced methods like L-BFGS can be represented within the LPD framework.
+
+This implies that, given the same stopping criterion (fixed number of iterations $K$), the LPD approach should, in theory, always perform at least as well as the best classical iterative method it generalises, provided it is trained adequately with sufficient data and capacity. In practice, LPD often significantly outperforms its classical counterparts by learning highly optimised, data-specific update rules.
+
+\subsubsection{Training and Application}
+
+The LPD network is trained end-to-end using supervised learning. The parameters $\Theta$ are optimised by minimising an empirical loss (cf. \eqref{eq:dnn-empirical-risk-minimisation}), typically the Mean Squared Error (MSE), over the training dataset. The optimisation is performed using stochastic gradient descent variants (e.g., Adam), where the gradients are computed via backpropagation (Algorithm \ref{alg:back-prop}) through the entire unrolled architecture. Crucially, this requires the ability to backpropagate through the forward operator $K$ and its adjoint $K^*$.
+
+LPD has demonstrated state-of-the-art performance in tomographic reconstruction tasks, such as low-dose CT, significantly outperforming classical methods like TV regularisation and often surpassing learned post-processing approaches, while maintaining a computationally efficient structure \cite{adler2018learned}.
+
+\subsection{Proximal neural networks (PNNs)}
+
+The concept of algorithm unrolling has established a broad category of neural network architectures inspired by optimisation algorithms. These are often referred to as \emph{unfolded networks}, \emph{unrolled methods}, or, particularly when the underlying algorithm is based on proximal splitting (see, e.g.,~\cite{combettes2011proximal} for an introduction), \emph{proximal neural networks (PNNs)} \cite{gregor2010learning, adler2017solving, adler2018learned, jiu2021deep, monga2021algorithm, le2022faster, le2023pnn, mardani2018neural, wang2025unrolling}.
+
+PNNs are designed by unrolling a fixed number of iterations of an optimisation algorithm built to solve variational regularisation problems like \eqref{eq:var_reg}. The structure of the algorithm is preserved in the network architecture: the proximal operators become the non-linear activation functions, while the linear operators, step sizes, and regularisation parameters are treated as learnable weights and biases.
+
+These architectures have proven to be highly competitive with traditional deep learning models for various imaging tasks (e.g., image restoration, denoising). They often achieve comparable or superior performance while relying on architectures with significantly fewer parameters. Furthermore, PNNs offer greater interpretability compared to generic deep networks, owing to their explicit connection to the underlying optimisation model.

@@ -325,7 +325,7 @@ If $\mathcal{C}$ is a convex set, then $\chi_{\mathcal{C}}$ is a convex function
 
 The concept of duality is captured by the convex conjugate, also known as the Fenchel-Legendre transform.
 
-\begin{defi}[Convex Conjugate]\normalfont
+\begin{defi}[Convex Conjugate]\label{def:convex_conjugate}\normalfont
 Let $F \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper functional. Its \emph{convex conjugate} is the functional $F^* \colon \mathcal{U}^* \to \mathbb{R} \cup \{+\infty\}$ defined by
 \[ F^*(p) := \sup_{u \in \mathcal{U}} \{ \langle p, u \rangle - F(u) \} \, . \]
 \end{defi}
@@ -338,7 +338,7 @@ Equality holds if and only if $p \in \partial F(u)$.
 \subsubsection{The Proximal Operator}
 A fundamental tool in non-smooth optimisation is the \emph{proximal operator} (or Moreau envelope). It allows us to handle non-differentiable regularisation terms by solving a local minimisation problem.
 
-\begin{defi}[Proximal Operator]\normalfont
+\begin{defi}[Proximal Operator]\label{def:prox_operator}\normalfont
 Let $J \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper, lower semi-continuous, convex functional, and let $\tau > 0$ be a parameter. The \emph{proximal operator} of $J$ with parameter $\tau$, denoted by $\operatorname{prox}_{\tau J} \colon \mathcal{U} \to \mathcal{U}$, is defined as
 \begin{align}
 \operatorname{prox}_{\tau J}(x) := \argmin_{u \in \mathcal{U}} \left\{ \frac{1}{2}\|u - x\|^2 + \tau J(u) \right\} \, .\label{eq:prox}
@@ -352,7 +352,7 @@ Let $\mathcal{U} = \mathbb{R}^n$ and $J(u) = \frac{\lambda}{2}\|u\|_2^2$. The pr
 Thus, $\operatorname{prox}_{\tau J}(x) = \frac{1}{1 + \tau\lambda} x$. This is a simple shrinkage (scaling) operation.
 \end{exm}
 
-\begin{exm}[$\ell^1$-Norm and Soft Thresholding]\normalfont
+\begin{exm}[$\ell^1$-Norm and Soft Thresholding]\label{exm:soft_thresholding_ch2}\normalfont
 Let $\mathcal{U} = \mathbb{R}^n$ and $J(u) = \|u\|_1 = \sum_{i=1}^n |u_i|$. Since the $\ell^1$-norm is separable (a sum of functions of individual components), the proximal problem decouples into $n$ one-dimensional problems:
 \[ u_i = \argmin_{z \in \mathbb{R}} \left\{ \frac{1}{2}(z - x_i)^2 + \tau |z| \right\} \, . \]
 The solution is given by the famous \emph{Soft Thresholding} operator, denoted by $\mathcal{S}_\tau$:

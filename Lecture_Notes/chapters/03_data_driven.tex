@@ -498,7 +498,7 @@ A more profound integration of learning into the variational framework involves 
 \subsection{Learning Operators in the Regularisation Function}
 We can leverage data to learn the transformations that best capture the prior information about the solution $u$.
 
-\subsubsection{Learning Sparsifying Transforms and Dictionaries}
+\subsubsection{Learning Sparsifying Transforms and Dictionaries}\label{sec:dict_learning}
 In sparse regularisation, the solution $u$ is assumed to have a sparse representation $\xi$ in some transform domain or dictionary $D$. Classical approaches use predefined dictionaries like wavelets or the DCT. \emph{Dictionary learning} aims to learn the optimal dictionary $D$ directly from data $\{u_i^\dagger\}_{i=1}^s$. This is typically formulated as an optimisation problem over both the dictionary and the sparse codes $\{\xi_i\}_{i=1}^s$, i.e.
 \begin{align}
     \min_{D, \{\xi_i\}} \sum_{i=1}^s \left( \frac{1}{2} \|u_i^\dagger - \text{Synth}_{D}(\xi_i)\|_{\mathcal{U}}^2 + \alpha \|\xi_i\|_p \right) \, , \label{eq:dictionary_learning}
