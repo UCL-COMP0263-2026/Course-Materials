@@ -8,6 +8,48 @@ The central theme of this chapter is the concept of \emph{algorithm unrolling}, 
 
 By the end of this chapter, you will understand not only how to solve non-smooth optimisation problems using proximal methods, but also how these algorithms can be systematically transformed into powerful neural network architectures for data-driven inverse problems.
 
+\section{Gradient descent}
+Before introducing first order methods for non-smooth optimisation, let us briefly recall the classical first-order method for smooth convex optimisation. Consider the problem
+\begin{align}
+\min_{u \in \mathcal{U}} E(u) \, , \label{eq:gd_problem}
+\end{align}
+where $E \colon \mathcal{U} \to \mathbb{R}$ is convex and continuously differentiable. A minimiser $u^*$ satisfies the first-order optimality condition $0 = \nabla E(u^*)$, and the basic gradient descent iteration reads
+\begin{align}
+u^{k+1} = u^k - \tau \nabla E(u^k) \, , \label{eq:gradient_descent}
+\end{align}
+with step size $\tau > 0$. Under standard smoothness assumptions (e.g., Lipschitz continuity of $\nabla E$), this method converges to a minimiser for an appropriate choice of $\tau$.
+
+\paragraph{Bregman proximal derivation}
+The gradient descent update \eqref{eq:gradient_descent} can be obtained by a Bregman proximal point method. Consider the iteration
+\begin{align*}
+u^{k+1} = \argmin_{u \in \mathcal{U}} \left\{ E(u) + D_J(u, u^k) \right\} \, ,
+\end{align*}
+where the Bregman distance is $D_J(u, v) = J(u) - J(v) - \langle \nabla J(v), u - v \rangle_\mathcal{U}$ as defined in Definition \ref{defi:bregman} and we choose
+\begin{align*}
+J(u) = \frac{1}{2\tau}\|u\|_\mathcal{U}^2 - E(u) \, .
+\end{align*}
+Then $\nabla J(u) = \frac{1}{\tau}u - \nabla E(u)$, and a direct expansion yields
+\begin{align*}
+E(u) + D_J(u, u^k)
+&= E(u) + J(u) - J(u^k) - \langle \nabla J(u^k), u - u^k \rangle_\mathcal{U} \, , \\
+&= E(u^k) + \langle \nabla E(u^k), u - u^k \rangle_\mathcal{U} + \frac{1}{2\tau}\|u - u^k\|_\mathcal{U}^2 \, ,
+\end{align*}
+which is the standard quadratic model of $E$ at $u^k$ with step size $\tau$. The first-order optimality condition of this function therefore gives
+\begin{align*}
+0 = \frac{1}{\tau}(u^{k+1} - u^k) + \nabla E(u^k)
+\quad \Longleftrightarrow \quad
+u^{k+1} = u^k - \tau \nabla E(u^k) \, ,
+\end{align*}
+which recovers \eqref{eq:gradient_descent}.
+
+When $E$ is convex but non-smooth, the gradient $\nabla E$ no longer exists. One can replace it by a subgradient $g^k \in \partial E(u^k)$ (cf. Definition \ref{defi:subdiff}) to obtain the subgradient method,
+\begin{align}
+u^{k+1} = u^k - \tau_k g^k \, , \quad g^k \in \partial E(u^k) \, .
+\end{align}
+However, convergence requires diminishing step sizes $\{\tau_k\}$, and the resulting rates are typically slow compared to smooth gradient descent.
+
+Many objectives of interest in inverse problems, such as the LASSO and ROF models (Examples \ref{exm:lasso} and \ref{exm:rof_inv}), are overall non-smooth. Consequently, standard gradient descent is not directly applicable, and subgradient descent is often impractical due to its slow convergence. This motivates the use of proximal algorithms, which are specifically designed for such non-smooth convex objectives.
+
 \section{Proximal algorithms}
 We have substantially talked about variational regularisation methods in Chapter \ref{ch:reg}, as a basis for non-smooth but model-based reconstruction methods for inverse problems. What we haven't talked about much, only in form of formative assessments and courseworks, is how we compute their solutions numerically. Given the non-smoothness of functions such as the one-norm or the total variation as used in Examples \ref{exm:lasso} and \ref{exm:rof_inv}, we cannot simply approximate these problems with smooth, gradient-based optimisation methods without smoothing the non-smoothness. An alternative approach are so-called proximal algorithms, based on the definition of a proximal map as introduced in \eqref{eq:prox}. Let us revisit the definition of the proximal operator and explore how it can be used 
 
@@ -75,6 +117,16 @@ This establishes a profound connection: computing the proximal operator yields t
 \subsubsection{Examples and properties of proximal operators}
 The efficiency of proximal algorithms depends on the ability to compute the proximal operator efficiently, ideally in closed form.
 
+To build complex neural network layers using proximal operators, we must understand how these operators behave under summation when the overall function is completely separable.
+
+\begin{thm}[Proximal Map of Separable Functions]\label{thm:prox_separable}\normalfont
+If a functional $J$ is completely separable, meaning $J(u) = \sum_{i=1}^n J_i(u_i)$ for $u \in \mathbb{R}^n$, then its proximal operator can be computed component-wise:
+\begin{align*}
+(\operatorname{prox}_{J}(v))_i = \operatorname{prox}_{J_i}(v_i) \, .
+\end{align*}
+\end{thm}
+This theorem justifies why non-linear activation functions in Proximal Neural Networks (like the Soft Thresholding operator that follows as the next example) operate element-wise on feature vectors, mirroring standard activations used in neural networks.
+
 \begin{exm}[$\ell^1$-Norm and Soft Thresholding (Recall)]\label{exm:soft_thresholding}\normalfont
 The most important example for sparse recovery is the $\ell^1$-norm (cf. Example \ref{exm:soft_thresholding_ch2}). Let $\mathcal{U} = \mathbb{R}^n$ and $J(u) = \alpha \|u\|_1 = \alpha \sum_i |u_i|$, with $\alpha > 0$. Since the norm is separable, the proximal operator can be computed component-wise by solving the scalar problem
 \begin{align*}
@@ -100,16 +152,7 @@ For the Total Variation regulariser (Example \ref{exm:rof_inv}), $J(u) = \alpha 
 \end{align*}
 While this does not have a closed-form solution, it is a convex problem that can be solved efficiently using iterative methods such as PDHG (as we will see in Section \ref{sec:pdhg}).
 \end{exm}
-
-To build complex neural network layers using proximal operators, we must understand how these operators behave under summation and transformations. Two fundamental calculus rules theoretically justify why proximal operators can be seamlessly integrated into deep learning architectures.
-
-\begin{thm}[Proximal of Separable Functions]\label{thm:prox_separable}\normalfont
-If a functional $J$ is completely separable, meaning $J(u) = \sum_{i=1}^n J_i(u_i)$ for $u \in \mathbb{R}^n$, then its proximal operator can be computed component-wise:
-\begin{align*}
-(\operatorname{prox}_{J}(v))_i = \operatorname{prox}_{J_i}(v_i) \, .
-\end{align*}
-\end{thm}
-This theorem justifies why non-linear activation functions in Proximal Neural Networks (like the Soft Thresholding operator) operate element-wise on feature vectors, mirroring standard feed-forward network activations.
+Before we proceed to computational methods that utilise proximal operators, let us take a look at closed-form proximal maps for a special case of affine composition.
 
 \begin{thm}[Affine Composition]\label{thm:prox_affine}\normalfont
 Let $J \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper, l.s.c., convex functional, and let $A \colon \mathcal{V} \to \mathcal{U}$ be a linear operator satisfying $A A^* = \gamma I$ for some $\gamma > 0$ (e.g., an orthogonal matrix or a tight frame). Then, for any $b \in \mathcal{U}$ we observe
@@ -118,6 +161,8 @@ Let $J \colon \mathcal{U} \to \mathbb{R} \cup \{+\infty\}$ be a proper, l.s.c., 
 \end{align*}
 \end{thm}
 This property can be utilised in designing unrolled networks with orthogonal transformation. By constraining the learned weight matrices to be orthogonal, the network can execute efficient, analytical proximal steps without requiring computationally expensive matrix inversions.
+
+You may wonder why we cannot apply Theorem \ref{thm:prox_affine} to the ROF problem, despite $\operatorname{TV}(u) \approx \| \nabla u \|_1$, which is an affine composition of $\| \cdot \|_1$ and $\nabla$. The problem is that the operator $\nabla$ does not satisfy the necesary condition for Theorem \ref{thm:prox_affine}, i.e., $\nabla \nabla^\ast = -\nabla \operatorname{div} \neq \gamma I$. This is why we will resort to numerical approaches instead.
 
 \subsection{Proximal gradient descent}
 We can utilise the proximal operator \eqref{eq:prox} to devise algorithms for solving composite optimisation problems, which frequently arise in the variational regularisation framework \eqref{eq:var_reg}. We consider the problem
@@ -164,7 +209,7 @@ u^{k+1} = \mathcal{S}_{\tau\alpha}(u^k - \tau K^*(Ku^k - f^\delta)) \, .
 \end{exm}
 
 \begin{rem}[Connection to Bregman Methods]\normalfont
-As discussed in the literature (e.g., \cite{benning2018modern}), PGD can be interpreted as a Bregman proximal method. If we define the Bregman distance generating function $J(u) = \frac{1}{2\tau}\|u\|_\mathcal{U}^2 - L(u)$, then PGD corresponds to the iteration
+As discussed in the literature (e.g., \cite{benning2018modern}) and similar to the derivation of gradient descent as a Bregman proximal method, PGD can also be interpreted as a Bregman proximal method. If we define the Bregman distance generating function $J(u) = \frac{1}{2\tau}\|u\|_\mathcal{U}^2 - L(u)$, then PGD corresponds to the iteration
 \begin{align*}
 u^{k+1} = \argmin_{u} \{ L(u) + S(u) + D_J(u, u^k) \} \, .
 \end{align*}
