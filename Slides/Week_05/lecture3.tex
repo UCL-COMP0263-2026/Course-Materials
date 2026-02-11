@@ -1,0 +1,519 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows, fit, patterns} 
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{uclblue}{cmyk}{1,0.24,0,0.64}
+\definecolor{uclred}{cmyk}{0,1,0.62,0}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\supremum}{sup}
+\DeclareMathOperator{\sign}{sign}
+
+\title{Unrolling Algorithms: From Iterations to Architecture}
+\subtitle{Lecture 3: Algorithm Unrolling \& Learned Architectures}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 12th February 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{The Unrolling Concept}
+
+\begin{frame}{Bridging the Gap}
+    We have explored two worlds:
+    \begin{enumerate}
+        \item \textbf{Variational Regularisation:} Rigorous, interpretable, stable, but relies on hand-crafted priors (TV, $\ell^1$) and slow iterative solvers.
+        \item \textbf{Deep Learning:} Fast, data-driven, expressive, but often a "black box" with stability issues.
+    \end{enumerate}
+    
+    \textbf{Question:} Can we design deep learning architectures that retain the mathematical structure of optimisation algorithms?
+    
+    \textbf{Answer:} \textbf{Algorithm Unrolling} (or Unfolding).
+\end{frame}
+
+\begin{frame}{The Iteration as a Layer}
+    Consider a standard iterative algorithm (like\only<2->{ Proximal} Gradient Descent\only<3-4>{ with $E(u) = \frac12 \| Ku - f^\delta \|^2$}):
+    $$ u^{k+1} = \only<2->{\operatorname{prox}_{\tau J}(}\only<1-3>{u^k - \tau} \only<1-2>{\nabla E(u^k)}\only<3>{(K^\ast K u^k - K^\ast f^\delta)} \only<4>{(I - \tau K^\ast K)u^k + \tau K^\ast f^\delta} \only<5->{A u^k + b} \only<2->{)} $$
+    
+    \only<6->{Or more generally:
+    $$ u^{k+1} = \Phi(u^k; A, b) $$}
+    
+    \only<7->{
+    \begin{itemize}
+        \item<7-> This looks exactly like a layer in an MLP or ResNet!
+        \item<8-> $u^k$ is the feature map at layer $k$.
+        \item<9-> $\Phi$ is the layer operation (linear transform + non-linearity).
+    \end{itemize}}
+\end{frame}
+
+\begin{frame}{The Unrolling Idea}
+    \textbf{Classical Approach:}
+    Run the iteration $k \to \infty$ until convergence. Parameters (step size $\tau$, regularisation $\alpha$) are fixed or tuned manually.\vspace{1em}
+    
+    \pause
+    \textbf{Unrolled Approach:}
+    \begin{enumerate}
+        \item Truncate the algorithm to a \textbf{fixed number of iterations} $K$ (e.g., $K=10$).
+        \item Treat each iteration $k$ as a layer in a deep network.
+        \item Relax the fixed parameters to be \textbf{learnable weights} $\theta_k$.
+    \end{enumerate}
+    
+    $$ f_\Theta(f^\delta) := u^K \quad \text{where} \quad u^{k+1} = \Phi_{\theta_k}(u^k, f^\delta) $$
+\end{frame}
+
+\begin{frame}{Visualising Unrolling}
+    \centering
+    \begin{tikzpicture}[node distance=1.5cm, auto, thick]
+        \node (in) {$f^\delta$};
+        \node[draw, rectangle, right=1cm of in] (L1) {Layer 1};
+        \node[draw, rectangle, right=1cm of L1] (L2) {Layer 2};
+        \node[right=1cm of L2] (dots) {$\dots$};
+        \node[draw, rectangle, right=1cm of dots] (LK) {Layer K};
+        \node[right=1cm of LK] (out) {$u^K$};
+        
+        \draw[->] (in) -- node[above] {$u^0$} (L1);
+        \draw[->] (L1) -- node[above] {$u^1$} (L2);
+        \draw[->] (L2) -- (dots);
+        \draw[->] (dots) -- (LK);
+        \draw[->] (LK) -- (out);
+        
+        \node[below=0.5cm of L1, align=center, font=\footnotesize] {Iteration 1\\Params $\theta_1$};
+        \node[below=0.5cm of L2, align=center, font=\footnotesize] {Iteration 2\\Params $\theta_2$};
+        \node[below=0.5cm of LK, align=center, font=\footnotesize] {Iteration K\\Params $\theta_K$};
+    \end{tikzpicture}
+    
+    The output $u^K$ is compared to the ground truth $u^\dagger$, and we train end-to-end via first-order optimisation and backpropagation.
+\end{frame}
+
+\begin{frame}{Why Unroll?}
+    \begin{theoremblock}{Advantages}
+        \begin{itemize}
+            \item \textbf{Data Efficiency:} Vastly fewer parameters than a U-Net. We only learn corrections to the physical model.
+            \item \textbf{Interpretability:} Each layer corresponds to a mathematical step (e.g., gradient descent, projection).
+            \item \textbf{Physics-Informed:} The forward operator $K$ is explicitly embedded in the network.
+        \end{itemize}
+    \end{theoremblock}
+    
+    Also known as \textbf{Proximal Neural Networks (PNNs)} \cite{combettes2011proximal, monga2021algorithm}.
+\end{frame}
+
+\begin{frame}{From Fixed to Trainable}
+    What can we learn?
+    
+    \begin{itemize}
+        \item \textbf{Step sizes:} Learn $\tau_k$ per layer.
+        \item \textbf{Regularisation parameters:} Learn $\alpha_k$ (thresholds).
+        \item \textbf{Linear Operators:} Replace $K^*$ with learned $W_k$.
+        \item \textbf{Proximal Operators:} Replace mathematical prox with CNNs (learning the regulariser itself).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Training Strategy}
+    Unrolled networks are trained usually via \textbf{Supervised Learning}.
+    
+    $$ \min_{\Theta} \sum_{i=1}^N \| f_\Theta(f^\delta_i) - u^\dagger_i \|^2 $$
+    
+    \textbf{Backpropagation:}
+    To compute gradients $\nabla_\Theta$, we must backpropagate through the unrolled layers.
+    \begin{itemize}
+        \item Requires differentiating through the forward operator $K$ and adjoint $K^*$.
+        \item Modern frameworks (PyTorch, TensorFlow) handle this via automatic differentiation (AD).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Taxonomy of Unrolled Methods}
+    \begin{itemize}
+        \item \textbf{Gradient-based:} Unrolling Gradient Descent / Landweber.
+        \item \textbf{Proximal-based:} Unrolling ISTA/FISTA (e.g., LISTA).
+        \item \textbf{Primal-Dual:} Unrolling ADMM or PDHG (e.g., LPD).
+        \item \textbf{Half-Quadratic Splitting:} Unrolling HQS (e.g., DnCNN).
+    \end{itemize}
+    
+    We will focus on \textbf{LISTA} (Sparse Coding) and \textbf{LPD} (Computed Tomography).
+\end{frame}
+
+\section{LISTA}
+
+\begin{frame}{Recap: ISTA}
+    Recall the Iterative Soft-Thresholding Algorithm (ISTA) for LASSO:
+    $$ \min_u \frac{1}{2}\|Ku - f^\delta\|^2 + \alpha \|u\|_1 \, . $$
+    
+    Update rule:
+    $$ u^{k+1} = \mathcal{S}_{\tau \alpha} \left( u^k - \tau K^*(K u^k - f^\delta) \right) $$
+    
+    Rearranging terms:
+    $$ u^{k+1} = \mathcal{S}_{\tau \alpha} \left( (I - \tau K^* K) u^k + \tau K^* f \right) $$
+\end{frame}
+
+\begin{frame}{Learned ISTA (LISTA)}
+    Introduced by Gregor \& LeCun (2010) \cite{gregor2010learning}.\vspace{1em}
+    
+    We take the ISTA structure, i.e.
+    $$ u^{k+1} = \mathcal{S}_{\gamma} ( S u^k + B f^\delta ) \, ,$$
+    
+    and simply treat the matrices and thresholds as free parameters:
+    \begin{itemize}
+        \item $S$: Recurrent weight (replaces $I - \tau K^*K$).
+        \item $B$: Input weight (replaces $\tau K^*$).
+        \item $\gamma$: Threshold (replaces $\tau \alpha$).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{LISTA Formulation}
+    We allow parameters to vary per layer $k$:
+    
+    \begin{block}{LISTA Layer $k$}
+    $$ u^{k+1} = \mathcal{S}_{\gamma_k} ( S_k u^k + B_k f^\delta ) $$
+    \end{block}
+    
+    \begin{itemize}
+        \item $S_k \in \mathbb{R}^{n \times n}$: Learnable matrix.
+        \item $B_k \in \mathbb{R}^{n \times m}$: Learnable matrix.
+        \item $\gamma_k \in \mathbb{R}$: Learnable threshold.
+        \item $\mathcal{S}$: Standard Soft-Thresholding activation function.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Example: Sparse Synthesis}
+    Often used for Sparse Coding: $u = L \xi$ (Synthesis dictionary).
+    We solve for the sparse code $\xi$:
+    $$ \min_{\xi} \frac{1}{2} \| K L \xi - f^\delta \|^2 + \alpha \|\xi\|_1 $$
+    
+    LISTA can learn the optimal "effective dictionary" to invert this problem quickly.
+    
+    \begin{itemize}
+        \item Classical ISTA: Converges in $O(1/k)$. Needs 100s of iterations.
+        \item LISTA: Trained to approximate the solution in $K=10$ iterations.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Why does it work?}
+    \textbf{Theoretical Insight:}
+    Even though the problem is convex, the geometry can be ill-conditioned (Hessian condition number).
+    
+    LISTA learns a \textbf{preconditioned} trajectory.
+    By allowing $S_k$ to deviate from $(I - \tau K^*K)$, the network learns to rotate the space to align with the sparsity basis, effectively performing a learned matrix inversion or coordinate transform that accelerates convergence.
+\end{frame}
+
+\begin{frame}{Accelerating Convergence}
+    Graph comparing convergence error vs iterations:
+    
+    \centering
+    \begin{tikzpicture}[scale=0.8]
+        \begin{axis}[
+            xlabel={Iterations $k$},
+            ylabel={Error (log scale)},
+            ymode=log,
+            domain=1:20,
+            legend pos=north east,
+            grid=major
+        ]
+        \addplot[blue, thick] {1/x}; \addlegendentry{ISTA}
+        \addplot[red, thick] {1/(x^2)}; \addlegendentry{FISTA}
+        \addplot[green!60!black, thick, mark=*] coordinates {
+            (1, 1.0) (2, 0.1) (3, 0.01) (4, 0.001) (5, 0.0001)
+        }; \addlegendentry{LISTA (Trained)}
+        \end{axis}
+    \end{tikzpicture}
+    
+    LISTA can achieve a "linear-like" convergence rate within the trained window.
+\end{frame}
+
+\begin{frame}{Beyond LISTA}
+    LISTA is great for sparse coding (1D signals, patches).\vspace{1em}
+    
+    \textbf{Limitations for Imaging:}
+    \begin{itemize}
+        \item Dense matrix multiplication $S_k u^k$ is too expensive for full images ($256^2 \times 256^2$).
+        \item We can replace dense matrices with \textbf{convolutional} operators.
+        \item Simple Soft-Thresholding is often not enough for complex image priors (textures, piecewise smooth).
+    \end{itemize}
+\end{frame}
+
+\section{Learned Primal-Dual (LPD)}
+
+\begin{frame}{Learned Primal-Dual (LPD)}
+    Introduced by Adler \& Öktem (2018) \cite{adler2018learned}.\vspace{1em}
+    
+    \textbf{Basis:} Unrolling the PDHG (Chambolle-Pock) algorithm.
+    Recall PDHG:
+    \begin{align*}
+        y^{k+1} &= \operatorname{prox}_{\sigma F^*}(y^k + \sigma K \bar{u}^k) \\
+        u^{k+1} &= \operatorname{prox}_{\tau G}(u^k - \tau K^* y^{k+1})
+    \end{align*}
+    
+    \textbf{Idea:} Replace the proximal operators with \textbf{CNNs} and learn the update logic.
+\end{frame}
+
+\begin{frame}{LPD: Key Innovations}
+    Adler \& Öktem introduced three key enhancements over naive unrolling:
+    
+    \begin{enumerate}
+        \item \textbf{Memory (Hidden States):}
+        Expand $u^k$ and $y^k$ to have multiple channels ($N_{primal}, N_{dual}$).
+        Only 1 channel is the image; others are "memory" passed to the next layer (RNN style).
+        
+        \item \textbf{Learned Operators:}
+        $\Gamma_{\theta_d}$ (Dual Net) and $\Lambda_{\theta_p}$ (Primal Net) replace proximal maps.
+        
+        \item \textbf{Learned Combination:}
+        Instead of $u - \tau K^* y$, the network takes $[u, K^*y]$ as concatenated input and learns how to mix them.
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{The Architecture Diagram}
+    \centering
+    \resizebox{0.9\textwidth}{!}{%
+    \begin{tikzpicture}[
+    node distance=2.5cm and 2cm,
+    >=stealth,
+    thick,
+    state/.style={rectangle, draw=blue!60!black, fill=blue!5, minimum height=1cm, minimum width=1.2cm, rounded corners=2pt, font=\bfseries},
+    update/.style={rectangle, draw=red!60!black, fill=red!5, minimum height=1.2cm, minimum width=1.8cm, rounded corners=2pt, align=center, font=\small},
+    operator/.style={circle, draw=green!60!black, fill=green!5, minimum size=1cm, font=\itshape},
+    data/.style={rectangle, draw=gray!80, fill=gray!10, minimum size=0.8cm, rounded corners},
+    skip line/.style={->, draw=black!70, dashed}
+    ]
+    
+    % States k
+    \node[state] (hk) {$\mathbf{h}^k$};
+    \node[state, below=3cm of hk] (uk) {$\mathbf{u}^k$};
+    
+    % Dual Update
+    \node[update, right=2.5cm of hk] (Gamma) {$\Gamma_{\theta_k^d}$};
+    \node[operator] (K) at ($(hk)!0.5!(Gamma) + (0, -1.5)$) {$K$};
+    \node[data, above=1cm of Gamma] (f) {$f^\delta$};
+    
+    % State k+1 (Dual)
+    \node[state, right=2.5cm of Gamma] (hk1) {$\mathbf{h}^{k+1}$};
+    
+    % Primal Update
+    \node[update] (Lambda) at (hk1 |- uk) {$\Lambda_{\theta_k^p}$};
+    \node[operator] (Kadj) at ($(hk1)!0.5!(Lambda) + (0, 0)$) {$K^*$};
+    
+    % State k+1 (Primal)
+    \node[state, right=2.5cm of Lambda] (uk1) {$\mathbf{u}^{k+1}$};
+    
+    % Connections
+    \draw[->] (uk) -| node[pos=0.2, above, font=\tiny] {$(1)$} (K);
+    \draw[->] (K) -- node[midway, right, font=\tiny] {eval} (Gamma.south west);
+    \draw[->] (hk) -- (Gamma);
+    \draw[->] (f) -- (Gamma);
+    \draw[->] (Gamma) -- (hk1);
+    
+    \draw[->] (hk1) -- node[midway, right, font=\tiny] {$(1)$} (Kadj);
+    \draw[->] (Kadj) -- node[midway, right, font=\tiny] {eval} (Lambda.north west);
+    
+    % Skip connection for u
+    \draw[skip line] (uk.south) -- ++(0,-0.6) -| ($(Lambda.south west)+(-0.3,0)$) -- (Lambda.south west);
+    \draw[->] (Lambda) -- (uk1);
+    
+    \node[anchor=east, blue!50!black] at ($(hk.west)+(-0.5,0)$) {Dual Space $\mathcal{V}$};
+    \node[anchor=east, blue!50!black] at ($(uk.west)+(-0.5,0)$) {Primal Space $\mathcal{U}$};
+    \end{tikzpicture}
+    }
+\end{frame}
+
+\begin{frame}{The LPD Algorithm}
+    \begin{algorithm}[H]
+    \caption{Learned Primal-Dual (LPD Layer $k$)}\label{alg:lpd}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} Primal state $\mathbf{u}^k$, Dual state $\mathbf{h}^k$, Data $f^\delta$.
+    \State \textbf{Dual Update:}
+    $$ \mathbf{h}^{k+1} = \Gamma_{\theta_k^d} \left( \mathbf{h}^k, K((\mathbf{u}^k)_1), f^\delta \right) $$
+    \State \textbf{Primal Update:}
+    $$ \mathbf{u}^{k+1} = \Lambda_{\theta_k^p} \left( \mathbf{u}^k, K^*((\mathbf{h}^{k+1})_1) \right) $$
+    \State \textbf{Output:} $\mathbf{u}^{k+1}, \mathbf{h}^{k+1}$.
+    \end{algorithmic}
+    \end{algorithm}
+    
+    \vspace{0.5em}
+    Note: The physics ($K, K^*$) only act on the first channel (the "image" channel). The other channels are learned features.
+\end{frame}
+
+\begin{frame}{Architecture of Learned Operators}
+    What are $\Gamma$ and $\Lambda$?
+    
+    Typically shallow \textbf{Residual CNNs} (MLPs with convolution operators and pooling operations).\vspace{1em}
+    
+    \begin{itemize}
+        \item Input: Concatenation of state and gradient/data.
+        \item Layers: $3 \times 3$ Convolutions, ReLU activations.
+        \item Output: Update step (added to input via residual connection).
+    \end{itemize}\vspace{1em}
+    
+    This allows the network to learn spatially varying, non-linear architectures (far more expressive than Total Variation).
+\end{frame}
+
+\begin{frame}{Relation to Classical Methods}
+    LPD is a \textbf{generalisation} of PDHG.
+    
+    \begin{theoremblock}{Universal Approximation}
+        If we restrict $N_p=2, N_d=1$, and force the CNNs to perform specific affine combinations and proximal maps, LPD \emph{exactly} reproduces the Chambolle-Pock algorithm.
+    \end{theoremblock}
+    
+    \textbf{Implication:} With training, LPD should perform \emph{at least as well} as the classical method (it can learn to be PDHG), but likely much better (at least on data similar to the training data).
+\end{frame}
+
+\begin{frame}{Training and Performance}
+    \textbf{Training:}
+    \begin{itemize}
+        \item Loss: MSE against ground truth $u^\dagger$ (or mixed losses).
+        \item Data: Pairs of $(f^\delta, u^\dagger)$.
+        \item Optimiser: Adam.
+    \end{itemize}
+    
+    \textbf{Performance:}
+    \begin{itemize}
+        \item State-of-the-art for CT reconstruction (esp. low dose / sparse view).
+        \item Outperforms total variation (TV) (removes staircasing).
+        \item Outperforms U-Net post-processing (better structure preservation).
+        \item Fast inference (feed-forward, fixed time).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Extensions: Proximal Neural Networks}
+    LPD is part of a wider family of \textbf{Proximal Neural Networks (PNNs)}.
+    
+    Other examples:
+    \begin{itemize}
+        \item \textbf{Unrolled ADMM:} Replacing linear solvers with learned filters.
+        \item \textbf{Deep Equilibrium Models (DEQ):} Finding the fixed point of the unrolled layer directly (infinite depth) \cite{bai2019deep, gilton2021deep}. We will explore these in more detail
+        \item \textbf{Neumann Networks:} Unrolling the Neumann series for matrix inversion.
+    \end{itemize}
+\end{frame}
+
+\section{Summary}
+
+\begin{frame}{Weekly Summary}
+    In the lectures of Week 5, we have explored the foundations and applications of algorithm unrolling:
+    
+    \begin{enumerate}
+        \item \textbf{Lecture 1 (Proximal Operators \& PGD):} 
+            Basic proximal operator theory, definition, and examples (soft-thresholding, TV).
+            Foundation methods: Proximal Gradient Descent and FISTA.
+        
+        \item \textbf{Lecture 2 (ADMM \& PDHG):}
+            Splitting methods for coupled constraints.
+            ADMM applied to Total Variation (Split Bregman).
+            Preconditioned ADMM and PDHG (Chambolle-Pock) for scalable imaging.
+        
+        \item \textbf{Lecture 3 (Algorithm Unrolling):}
+            Truncating iterations and learning parameters. LISTA for sparse coding.
+            LPD: Replacing proximal operators with learned CNNs.
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Outlook}
+    After the reading week, we will focus on \textbf{Plug-and-Play (PnP) Methods}:
+    
+    \begin{itemize}
+        \item \textbf{Plug-and-Play Methods (PnP):}
+        A paradigm where proximal operators in classical algorithms (ADMM, PDHG) are replaced with learned denoisers.
+        Instead of solving the proximal step exactly, we plug in a pre-trained denoising neural network.
+        \begin{itemize}
+            \item RED (Regularisation by Denoising): Replace $\operatorname{prox}_{\tau J}$ with a denoiser $\mathcal{D}$.
+            \item Maintains convergence properties under suitable conditions on the denoiser.
+            \item Bridges classical optimisation theory with modern deep learning.
+        \end{itemize}
+        
+        \item \textbf{Denoising Neural Networks as Priors:}
+        Networks like DRUnet learn a universal ``image prior'' without task-specific training (trained on natural images).
+        Can be plugged into any imaging algorithm (CT, MRI, deblurring, etc.) during test time.
+        Advantages:
+        \begin{itemize}
+            \item No retraining needed for different forward operators.
+            \item Combines classical algorithmic guarantees (convergence) with learned image priors.
+            \item Flexible: Can adapt the algorithm (ADMM, PDHG, gradient descent) to the problem at hand.
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+% --- References Frame ---
+\begin{frame}[allowframebreaks]{References}
+    \footnotesize
+    \bibliographystyle{plain}
+    \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}

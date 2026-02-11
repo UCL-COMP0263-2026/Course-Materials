@@ -229,6 +229,26 @@
     \end{columns}
 \end{frame}
 
+\begin{frame}{Split Bregman: Summary}
+    Complete algorithm for the ROF model with Split Bregman (ADMM):
+    
+    \begin{algorithm}[H]
+    \caption{Split Bregman for ROF Model}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} $f^\delta$ (noisy image), $\alpha$ (regularisation), $\delta$ (penalty), $u^0$, $z^0 = \nabla u^0$, $v^0 = 0$
+    \For{$k = 0, 1, 2, \ldots$}
+        \State \textbf{u-update:} Solve $u^{k+1} = (I - \delta \Delta)^{-1}\left(f^\delta + \delta \nabla^\top(z^k - v^k)\right)$
+        \State \textbf{z-update:} $z^{k+1} = \mathcal{S}_{\alpha/\delta}(\nabla u^{k+1} + v^k)$
+        \State \textbf{Dual update:} $v^{k+1} = v^k + \nabla u^{k+1} - z^{k+1}$
+    \EndFor
+    \State \textbf{Output:} $u^k$
+    \end{algorithmic}
+    \end{algorithm}
+    
+    \vspace{0.3cm}
+    \textbf{Key operations:} Linear solve (FFT/iterative) + Soft thresholding + Residual update.
+\end{frame}
+
 \begin{frame}{ADMM Convergence}
     For convex $G$ and $F$, and linear constraints, ADMM converges to a solution.
     
@@ -298,8 +318,8 @@
     
     \begin{itemize}
         \item No linear solvers inside the network layers.
-        \item Strictly feed-forward.
-        \item Fully differentiable.
+        \item Strictly feed-forward (MLP).
+        \item Activations often not differentiable (e.g. soft-thresholding, ReLU etc.).
     \end{itemize}
     \end{block}
 \end{frame}
@@ -447,7 +467,7 @@
     
     \textbf{Updates:}
     \begin{enumerate}
-        \item Dual: $y^{k+1} = P_{\alpha B_\infty} (y^k + \sigma \nabla \bar{u}^k)$ (Projection onto $\ell^\infty$ ball).
+        \item Dual: $y^{k+1} = P_{\alpha B_\infty} (y^k + \sigma \nabla \bar{u}^k) = \max(-\alpha, \min(y^k + \sigma \nabla \bar{u}^k, \alpha))$ (component-wise).
         \item Primal: $u^{k+1} = \frac{u^k + \tau f - \tau \nabla^\top y^{k+1}}{1 + \tau}$ (Prox of quadratic).
         \item Extrap: $\bar{u}^{k+1} = 2u^{k+1} - u^k$.
     \end{enumerate}
