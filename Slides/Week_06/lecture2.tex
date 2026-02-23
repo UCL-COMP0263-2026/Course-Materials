@@ -1,0 +1,324 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows, fit, patterns} 
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{uclblue}{cmyk}{1,0.24,0,0.64}
+\definecolor{uclred}{cmyk}{0,1,0.62,0}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\supremum}{sup}
+\DeclareMathOperator{\sign}{sign}
+
+\title{Plug-and-Play Priors and Regularisation by Denoising}
+\subtitle{Part 2: Regularisation by Denoising (RED)}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 24th February 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Recap: The Limits of PnP}
+
+\begin{frame}{Recap: Plug-and-Play (PnP)}
+    In the previous lecture, we introduced the \textbf{Plug-and-Play (PnP)} heuristic.
+    
+    Instead of hand-crafting a regulariser $J$ and deriving its proximal operator, we replaced the proximal step in splitting algorithms directly with an off-the-shelf denoiser $D_\sigma(\cdot)$:
+    $$ v_{k+1} = D_{\sigma_k}(u_{k+1}) $$
+    
+    \pause
+    \vspace{-0.2cm}
+    \begin{theoremblock}{The Philosophical Problem}
+        By merely replacing the proximal operator with an arbitrary denoiser, we completely break the link to the original variational objective
+        $$ \min_u \left\{ F(Ku, f^\delta) + \alpha J(u) \right\} \, . $$
+        Without an explicit regularisation functional $J$, we do not know what the algorithm is actually minimising, nor can we define a concrete energy landscape.
+    \end{theoremblock}
+\end{frame}
+
+\section{The RED Functional}
+
+\begin{frame}{Regularisation by Denoising (RED)}
+    \emph{Regularisation by Denoising (RED)}, introduced by Romano et al. \cite{romano2017little}, attempts to solve this philosophical problem.\vspace{0.2cm}
+    
+    \textbf{The Goal:} Construct an \emph{explicit} regularisation functional directly from the application of the chosen denoiser $D(u)$.
+\end{frame}
+
+\begin{frame}{Defining the RED Functional}
+    Let $D(u)$ be an off-the-shelf denoiser. The residual $u - D(u)$ represents the noise (or high-frequency artifacts) isolated by the denoiser.\vspace{0.2cm}
+    
+    RED defines the explicit regularisation functional as
+    $$ \rho(u) = \frac{1}{2} \langle u, u - D(u) \rangle \, . $$
+    
+    \pause
+    \textbf{The Intuition:}
+    \begin{itemize}
+        \item If $u$ is a clean image, the denoiser should not alter it. Thus $D(u) \approx u$, making $\rho(u) \approx 0$.
+        \item If $u$ is noisy, the inner product between the image and the extracted noise will yield a large penalty.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Deriving the RED Gradient}
+    To minimise the overall objective $E(u) = F(Ku, f^\delta) + \alpha \rho(u)$ using gradient methods, we must compute $\nabla \rho(u)$.\vspace{0.2cm}
+    
+    Applying the product rule to $\rho(u) = \frac{1}{2} \langle u, u - D(u) \rangle$ yields
+    \begin{align*}
+        \nabla \rho(u) &= \frac{1}{2} \nabla_u \left( \langle u, u \rangle - \langle u, D(u) \rangle \right) \, , \\
+        &= \frac{1}{2} \left( 2u - D(u) - [\nabla D(u)]^\top u \right) \, , \\
+        &= \frac{1}{2} \left( u - D(u) \right) + \frac{1}{2} \left( u - [\nabla D(u)]^\top u \right) \, , 
+    \end{align*}
+    where $\nabla D(u)$ is the Jacobian matrix of the denoiser $D$.
+\end{frame}
+
+\begin{frame}{The Gradient Simplification Claim}
+    Romano et al. \cite{romano2017little} claimed that under specific conditions, this gradient simplifies to just the denoising residual
+    $$ \nabla \rho(u) = u - D(u) \, . $$
+    
+    \pause
+    For this to be true, the second term must match the first: $[\nabla D(u)]^\top u = D(u)$. The authors justified this via two mathematical assumptions about $D$:
+    \begin{enumerate}
+        \item \textbf{Jacobian Symmetry:} $[\nabla D(u)]^\top = \nabla D(u)$.
+        \item \textbf{Local Homogeneity:} $D(cu) = c D(u)$ for scalar $c \approx 1$. (By Euler's homogeneous function theorem, this implies $\nabla D(u) u = D(u)$).
+    \end{enumerate}
+    
+    If true, we can claim $\nabla \rho(u) = u - D(u)$ and, for example, apply gradient descent to solve the variational regularisation problem:
+    $$ u_{k+1} = u_k - \tau \left( \nabla F(Ku_k, f^\delta) + \alpha (u_k - D(u_k)) \right) $$
+\end{frame}
+
+\section{Theoretical Analysis and The Jacobian Critique}
+
+\begin{frame}{The Jacobian Critique}
+    The RED framework offers an elegant narrative. However, a detailed mathematical analysis by Reehorst and Schniter \cite{reehorst2018regularization} revealed a fundamental flaw.
+    
+    \begin{theoremblock}{Conservative Vector Fields}
+        For an iterative algorithm updating via $u_{k+1} = u_k - \tau V(u_k)$ to be minimising a scalar objective function $\rho(u)$, the vector field $V(u)$ must be \textbf{conservative} (it must be the exact gradient of some scalar potential).
+    \end{theoremblock}
+    
+    A continuously differentiable vector field $V$ is conservative \emph{if and only if} its Jacobian matrix is symmetric.
+\end{frame}
+
+\begin{frame}{Checking the Symmetry Condition}
+    In RED, the proposed gradient vector field is $V(u) = u - D(u)$.
+    Its Jacobian is
+    $$ \nabla V(u) = I - \nabla D(u) \, .s$$
+    
+    For $u - D(u)$ to be the gradient of \emph{any} scalar function, the denoiser's Jacobian $\nabla D(u)$ must be perfectly symmetric:
+    $$ \frac{\partial [D(u)]_i}{\partial u_j} = \frac{\partial [D(u)]_j}{\partial u_i} \quad \text{for all } i, j $$
+    
+    \textbf{Visual Intuition:} If we change pixel $j$, does the denoiser's output at pixel $i$ change \emph{exactly as much} as output $j$ would change if we perturbed pixel $i$?
+\end{frame}
+
+\begin{frame}{Reality Check: Do Denoisers have Symmetric Jacobians?}
+    \textbf{No, they do not}, as was shown in \cite{reehorst2018regularization} where the authors rigorously tested modern denoisers.\vspace{1em}
+    
+    \begin{itemize}
+        \item \textbf{Classical Denoisers (NLM, BM3D):} Rely on complex, data-dependent block-matching mechanisms. Highly asymmetric Jacobians.
+        \item \textbf{Deep Learning CNNs:} Standard feed-forward networks (DnCNN, U-Net) with non-linear activations (ReLU) are structurally asymmetric unless specifically constrained.
+    \end{itemize}
+    
+    \pause
+    \vspace{1em}
+    \textbf{The Consequence:} The vector field $u - D(u)$ has a non-zero curl. It is not conservative. Therefore, it is \textbf{not the gradient of $\rho(u)$}. The elegant RED objective is \textbf{useless}.
+\end{frame}
+
+\section{Consensus Equilibrium}
+
+\begin{frame}{Consensus Equilibrium}
+    If standard RED (and PnP) algorithms are not minimising a global cost function, what are they doing?\vspace{0.2cm}
+    
+    We must interpret them through the lens of \textbf{Consensus Equilibrium} (Root-Finding). The algorithms seek to solve the system of non-linear equations
+    $$ \nabla F(Ku^*, f^\delta) + \alpha (u^* - D(u^*)) = 0 \, . $$
+    
+    \begin{itemize}
+        \item $\nabla F$: Pulls the solution towards data consistency (the "Data Force").
+        \item $\alpha(u^* - D(u^*))$: Pulls the solution towards the natural image manifold (the "Prior Force").
+    \end{itemize}
+    
+    The algorithm stops when the pull of the data exactly cancels the correction of the denoiser. This is an equilibrium state, not necessarily a minimum of a function.
+\end{frame}
+
+\section{Practical RED Algorithms}
+
+\begin{frame}{Fixed-Point RED (FP-RED)}
+    While naive gradient descent can seek this equilibrium, more efficient solvers exist. Let's assume Gau\ss ian noise $F(Ku, f^\delta) = \frac{1}{2}\|Ku - f^\delta\|_2^2$.\vspace{1em}
+    
+    The RED stationary condition is
+    $$ K^*(Ku^* - f^\delta) + \alpha (u^* - D(u^*)) = 0 \, . $$
+    
+    Rearranging to isolate $u^*$ on the LHS yields the fixed-point equation
+    $$ (K^*K + \alpha I) u^* = K^* f^\delta + \alpha D(u^*) \, . $$
+\end{frame}
+
+\begin{frame}{The FP-RED Algorithm}
+    This naturally suggests an iterative scheme, \textbf{FP-RED}:
+    
+    \begin{algorithm}[H]
+    \caption{Fixed-Point RED (FP-RED)}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} Data $f^\delta$, Operator $K$, Denoiser $D$, Parameter $\alpha$
+    \State \textbf{Initialise:} $u_0 = K^\ast f^\delta$
+    \For{$k = 1, \dots, N$}
+        \State $u_{k+1} = (K^*K + \alpha I)^{-1} \left( K^* f^\delta + \alpha D(u_k) \right)$
+    \EndFor
+    \State \textbf{Return:} $u_{N}$
+    \end{algorithmic}
+    \end{algorithm}
+    
+    \pause
+    \textbf{Comparison to PnP-HQS:}
+    Both solve Tikhonov-regularised linear systems. 
+    \begin{itemize}
+        \item PnP-HQS: Applies denoiser sequentially \emph{after} inversion.
+        \item FP-RED: Integrates the denoiser output directly into the source term.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Going further: RED-ADMM}
+    Just like PnP, we can solve the RED consensus problem using ADMM.
+    We split variables $u = v$ and minimise
+    $$ \min_{u, v} F(Ku, f^\delta) + \alpha \rho(v) \quad \text{s.t.} \quad u = v \, . $$
+    
+    The resulting RED-ADMM algorithm differs significantly from PnP-ADMM:
+    \begin{itemize}
+        \item \textbf{Inversion:} Standard linear solve for $u$.
+        \item \textbf{Denoising:} Instead of a proximal map, we solve a projection involving the explicit RED gradient
+        $$ v_{k+1} = \frac{1}{\mu + \alpha} (\mu(u_{k+1} + w_k) + \alpha D(v_k)) $$
+    \end{itemize}
+    \textbf{Key Difference:} PnP applies $D(\cdot)$ to the input; RED averages the input with the denoiser output.
+\end{frame}
+
+\section{Convergence of RED as Root-Finding}
+
+\begin{frame}{Convergence via Monotone Operator Theory}
+    Because we lack a valid objective function, we cannot use descent lemmas to prove convergence. We analyse FP-RED as an operator sequence:
+    $$ u_{k+1} = T_{FP}(u_k) \quad \text{where} \quad T_{FP}(u) = (K^*K + \alpha I)^{-1} (K^* f^\delta + \alpha D(u)) $$
+    
+    The inversion matrix $(K^*K + \alpha I)^{-1}$ acts as a dampening factor (firmly non-expansive). The convergence relies entirely on the Lipschitz constant $L_D$ of $D(u)$:\vspace{0.2cm}
+    
+    \begin{itemize}
+        \item \textbf{Strict Contraction ($L_D < 1$):} Converges uniquely by the Banach Fixed-Point Theorem.
+        \item \textbf{Non-Expansive ($L_D = 1$):} Converges via the Krasnosel'skii-Mann (KM) theorem (requires an averaging/relaxation step).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Enforcing Convergence in Deep Learning}
+    Standard CNN training does not constrain the Lipschitz constant. A standard ResNet can easily have $L_D > 10$.\vspace{0.2cm}
+    
+    If used in FP-RED, this acts as an \textbf{expander}, causing the fixed-point iteration to diverge (explode).\vspace{0.2cm}
+    
+    \textbf{Spectral Normalisation:}
+    \begin{itemize}
+        \item We normalise the weight matrix $W_l$ of every layer by its spectral norm (largest singular value): $\hat{W}_l = W_l / \sigma_{\max}(W_l)$.
+        \item It guarantees $L_{\operatorname{Net}} \le \prod L_{\operatorname{layer}} = 1$.
+    \end{itemize}
+    This simple change guarantees the stability of RED and PnP.
+\end{frame}
+
+\section{Summary \& Outlook}
+
+\begin{frame}{Summary}
+    \begin{itemize}
+        \item \textbf{RED (Regularisation by Denoising)} attempts to define an explicit variational regulariser $\rho(u)$ directly from a denoiser.
+        \item \textbf{The Jacobian Critique:} The derived gradient $u - D(u)$ is only valid if the denoiser has a symmetric Jacobian. Practical denoisers (CNNs, BM3D) do not.
+        \item \textbf{Resolution:} RED does not minimise a cost function; it solves a \textbf{Consensus Equilibrium} problem.
+        \item \textbf{FP-RED:} An efficient root-finding algorithm that dynamically integrates the denoiser into linear inversion.
+        \item \textbf{Convergence:} Guaranteed by monotone operator theory if the denoiser is trained to be Lipschitz continuous ($L_D \le 1$).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Outlook}
+    We have now viewed PnP and RED through two lenses:\vspace{0.2cm}
+    \begin{enumerate}
+        \item The Optimisation Perspective.
+        \item The Fixed-Point / Root-Finding Perspective.
+    \end{enumerate}\vspace{0.2cm}
+    
+    In the final lecture of this week, we will introduce a third lens: \textbf{The Probabilistic Perspective}.\vspace{0.2cm} 
+    
+    We will explore Tweedie's Formula to show that $u - D(u)$ is actually performing \emph{score matching}, fundamentally connecting these deterministic algorithms to modern generative AI and Diffusion Models.
+\end{frame}
+
+\begin{frame}[allowframebreaks]{References}
+    \bibliographystyle{abbrv}
+    \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}

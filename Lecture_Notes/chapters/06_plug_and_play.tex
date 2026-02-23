@@ -380,6 +380,18 @@ Now, we consider the marginal distribution of the noisy data, $p_\sigma(y)$, obt
 \begin{align}
     p_\sigma(y) = \int p(y | x) p(x) \, dx \, .\label{eq:marginalised_noisy_data_distribution}
 \end{align}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../Common_Images/pnp/smoothed-marginal-likelihood.png}
+    \caption{Illustration of the convolution of a complex probability prior with a Gau\ss ian noise kernel resulting in a smoothed marginal likelihood. This diagram was created with Nano Banana Pro.}
+    \label{fig:smoothed_marginal_likelihood}
+\end{figure}
+
+\begin{rem}\label{rem:marlikconv}
+Notice that the marginal likelihood $p_\sigma(y) = \int p(y|x)p(x) \, dx$ is mathematically equivalent to the convolution of the clean prior $p(x)$ with the Gau\ss ian noise distribution $\mathcal{N}(0, \sigma^2 I)$. Therefore, in the context of Gau\ss ian noise, the marginal likelihood of the data is synonymous with a ``smoothed prior''.
+\end{rem}
+
 Let us take the gradient of \eqref{eq:marginalised_noisy_data_distribution} with respect to $y$. We can move the gradient inside the integral due to linearity and substitute \eqref{eq:tweedie_likelihood_grad} to obtain
 \begin{align}
     \nabla_y p_\sigma(y) &= \int \nabla_y p(y | x) p(x) \, dx \nonumber \\
@@ -458,17 +470,16 @@ Now, we take the gradient with respect to the image $u$. Because the marginal li
     \nabla_u \log p(u | f^\delta) = \nabla_u \log p(f^\delta | u) + \nabla_u \log p(u) \, .
     \label{eq:posterior_score_split}
 \end{align}
-This equation is beautifully intuitive. The direction of highest posterior probability is simply the sum of two separate "compasses":
+This equation is beautifully intuitive. The direction of highest posterior probability is simply the sum of two separate compasses:
+
 \begin{enumerate}
-    \item $\nabla_u \log p(f^\delta | u)$: The \emph{likelihood score}. This pushes the image to match the physical measurements. If our data fidelity assumes Gau\ss ian noise, this is exactly the negative gradient of our data term, i.e., $-\nabla_u F(Ku, f^\delta)$.
-    \item $\nabla_u \log p(u)$: The \emph{prior score}. This pushes the image to look like a natural image. By Tweedie's Formula (Equation \ref{eq:score_denoiser}), we know this is equal to $\frac{1}{\sigma^2}(D_\sigma(u) - u)$.
+    \item $\nabla_u \log p(f^\delta | u)$: The \emph{likelihood score}. This pushes the image to match the physical measurements. If our data fidelity assumes Gau\ss ian noise, this is exactly the negative gradient of our data term: $-\nabla_u F(Ku, f^\delta)$.
+    \item $\nabla_u \log p(u)$: The \emph{prior score}. This pushes the image to look like a natural, clean image. 
 \end{enumerate}
-Substituting these two components back into our Langevin dynamics formula \eqref{eq:langevin_base}, the final sampling update becomes
-\begin{align}
-    u_{k+1} = u_k - \frac{\tau}{2} \nabla_u F(Ku_k, f^\delta) + \frac{\tau}{2\sigma^2} \Big( D_\sigma(u_k) - u_k \Big) + \sqrt{\tau} z_k \, .
-    \label{eq:langevin_pnp}
-\end{align}
-Note that if we remove the random noise $\sqrt{\tau} z_k$, Equation \eqref{eq:langevin_pnp} is mathematically identical to the gradient descent update for RED \eqref{eq:marginalised_noisy_data_distribution}, and therefore highly related to PnP.
+
+Here, however, we encounter a theoretical hurdle. For natural images, the exact prior $p(u)$ is confined to a highly complex, lower-dimensional manifold. If $u$ is even slightly noisy, $p(u) \approx 0$, making the exact prior score $\nabla_u \log p(u)$ undefined or numerically unstable almost everywhere.
+
+Modern \textbf{Score-Based Generative Models} bypass this issue by instead of using the intractable clean prior $p(u)$, they substitute it with the \textbf{smoothed prior} (or marginal distribution) $p_\sigma(u)$, which is the true prior perturbed by Gau\ss ian noise of variance $\sigma^2$ as explained in Remark \ref{rem:marlikconv}. 
 
 \begin{figure}[htbp]
     \centering
@@ -477,12 +488,27 @@ Note that if we remove the random noise $\sqrt{\tau} z_k$, Equation \eqref{eq:la
     \label{fig:langevin_annealing_traps}
 \end{figure}
 
-This specific connection is remarkable. It shows that by injecting controlled noise into PnP/RED algorithms, and using denoisers evaluated across multiple noise levels $\sigma$ to guide the random walk, we transition from classical deterministic solvers to stochastic samplers. This exact derivation forms the mathematical backbone of modern \textbf{Score-Based Generative Models} and \textbf{Diffusion Models}.
+Because the noise smooths out the probability mass, $p_\sigma(u) > 0$ everywhere, ensuring the score vector field is well-behaved and points smoothly towards the data manifold from any location in the space. Crucially, as we proved previously with culmination in Equation \eqref{eq:score_denoiser}, Tweedie's formula provides exactly this smoothed score via our denoiser, i.e.,
+\begin{align*}
+    \nabla_u \log p_\sigma(u) = \frac{D_\sigma(u) - u}{\sigma^2} \, .
+\end{align*}
+By replacing the exact prior score with the smoothed prior score, the Langevin dynamics update becomes practically computable. Substituting these components back into \eqref{eq:langevin_base}, the final sampling update reads
+\begin{align}
+    u_{k+1} = u_k - \frac{\tau}{2} \nabla_u F(Ku_k, f^\delta) + \frac{\tau}{2\sigma^2} \Big( D_\sigma(u_k) - u_k \Big) + \sqrt{\tau} z_k \, .
+    \label{eq:langevin_pnp}
+\end{align}
 
-\subsection{Annealed Langevin Dynamics and Diffusion Posterior Sampling}
-\label{sec:annealed_langevin}
-
-While Equation \eqref{eq:langevin_pnp} elegantly links PnP, RED, and Langevin sampling, running this algorithm at a \emph{fixed} noise level $\sigma$ presents a massive practical challenge. The true posterior distribution of natural images is highly multi-modal -- it consists of many sharp peaks separated by vast regions of near-zero probability. 
+% This equation is beautifully intuitive. The direction of highest posterior probability is simply the sum of two separate "compasses":
+% \begin{enumerate}
+%     \item $\nabla_u \log p(f^\delta | u)$: The \emph{likelihood score}. This pushes the image to match the physical measurements. If our data fidelity assumes Gau\ss ian noise, this is exactly the negative gradient of our data term, i.e., $-\nabla_u F(Ku, f^\delta)$.
+%     \item $\nabla_u \log p(u)$: The \emph{prior score}. This pushes the image to look like a natural image. By Tweedie's Formula (Equation \ref{eq:score_denoiser}), we know this is equal to $\frac{1}{\sigma^2}(D_\sigma(u) - u)$.
+% \end{enumerate}
+% Substituting these two components back into our Langevin dynamics formula \eqref{eq:langevin_base}, the final sampling update becomes
+% \begin{align}
+%     u_{k+1} = u_k - \frac{\tau}{2} \nabla_u F(Ku_k, f^\delta) + \frac{\tau}{2\sigma^2} \Big( D_\sigma(u_k) - u_k \Big) + \sqrt{\tau} z_k \, .
+%     \label{eq:langevin_pnp}
+% \end{align}
+Note that if we remove the random noise $\sqrt{\tau} z_k$, Equation \eqref{eq:langevin_pnp} is mathematically identical to the gradient descent update for RED \eqref{eq:marginalised_noisy_data_distribution}, and therefore highly related to PnP.
 
 \begin{figure}[htbp]
     \centering
@@ -490,6 +516,13 @@ While Equation \eqref{eq:langevin_pnp} elegantly links PnP, RED, and Langevin sa
     \caption{Annealed noise schedule used in diffusion models: sampling starts from high-noise Gaussian states and progressively refines toward clean image structure as the noise level decreases. Image generated with Nano Banana Pro.}
     \label{fig:noise_schedule_diffusion}
 \end{figure}
+
+This specific connection is remarkable. It shows that by injecting controlled noise into PnP/RED algorithms, and using denoisers evaluated across multiple noise levels $\sigma$ to guide the random walk, we transition from classical deterministic solvers to stochastic samplers. This exact derivation forms the mathematical backbone of modern score-based generative models and diffusion models.
+
+\subsection{Annealed Langevin Dynamics and Diffusion Posterior Sampling}
+\label{sec:annealed_langevin}
+
+While Equation \eqref{eq:langevin_pnp} elegantly links PnP, RED, and Langevin sampling, running this algorithm at a \emph{fixed} noise level $\sigma$ presents a massive practical challenge. The true posterior distribution of natural images is highly multi-modal -- it consists of many sharp peaks separated by vast regions of near-zero probability. 
 
 If we run standard Langevin dynamics with a small $\sigma$, the random noise $\sqrt{\tau} z_k$ is not strong enough to kick the image out of a local peak. The algorithm gets trapped, failing to explore the full diversity of the posterior. Conversely, if we use a very large $\sigma$, the image wanders freely but never settles into a sharp, high-quality solution.
 

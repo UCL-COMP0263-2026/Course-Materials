@@ -1,0 +1,406 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows, fit, patterns} 
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{uclblue}{cmyk}{1,0.24,0,0.64}
+\definecolor{uclred}{cmyk}{0,1,0.62,0}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\supremum}{sup}
+\DeclareMathOperator{\sign}{sign}
+
+\title{Plug-and-Play Priors and Regularisation by Denoising}
+\subtitle{Part 1: From Proximal Splitting to Plug-and-Play}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 24th February 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Introduction: Bridging the Gap}
+
+\begin{frame}{Recap: Variational Regularisation}
+    Previously, we established the framework of variational regularisation
+    $$ u^* \in \argmin_{u} \left\{ F(Ku, f^\delta) + \alpha J(u) \right\} \, . $$
+    
+    \begin{itemize}
+        \item $F(Ku, f^\delta)$: \textbf{Data fidelity} (keeps reconstruction consistent with measurements).
+        \item $J(u)$: \textbf{Regularisation term} (encodes prior knowledge, e.g., smoothness, sparsity).
+    \end{itemize}
+    
+    \pause
+    \vspace{0.5em}
+    \textbf{The Deep Learning Approach:}
+    We also explored how to learn these regularisers $J_\Theta(u)$ end-to-end using neural networks (e.g., the NETT framework) or unroll algorithms as seen last week.
+\end{frame}
+
+\begin{frame}{A Different Paradigm}
+    Today, we introduce a method that bridges classical optimisation and deep learning without needing to train a network explicitly as a regulariser $J(u)$.
+    
+    \vspace{1em}
+    \begin{theoremblock}{The Core Idea}
+        The ``proximal operator'' step in many splitting algorithms is mathematically equivalent to a \textbf{denoising problem}. 
+        
+        Therefore, we can ``plug in'' off-the-shelf image denoisers (like BM3D or pre-trained CNNs) directly into iterative algorithms, effectively using the denoiser as an implicit prior.
+    \end{theoremblock}
+    
+    This is known as the \textbf{Plug-and-Play (PnP)} framework.
+\end{frame}
+
+\section{Half-Quadratic Splitting (HQS)}
+
+\begin{frame}{Revisiting Variable Splitting}
+    \begin{itemize}
+    \item To solve standard variational problems with non-smooth $J(u)$ and operator coupling (e.g., Total Variation), we rely on splitting techniques.\pause
+    
+    \item Previously, we looked at ADMM and PDHG. Today, we introduce a simpler method: \textbf{Half-Quadratic Splitting (HQS)}.\pause
+    
+    \item We introduce an auxiliary variable $v \approx u$ and reformulate the original problem to
+    $$ \min_{u, v} \left\{ F(Ku, f^\delta) + \alpha J(v) + \frac{\mu}{2} \|u - v\|_2^2 \right\} \, , $$
+    where $\mu > 0$ is a penalty parameter. As $\mu \to \infty$, $u \to v$ and we solve the original problem.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Alternating Minimisation in HQS}
+    Similar to ADMM, we solve the HQS objective via alternating minimisation:
+    \begin{subequations}
+    \begin{align}
+        u_{k+1} &= \argmin_{u} \left\{ F(Ku, f^\delta) + \frac{\mu}{2} \|u - v_k\|_2^2 \right\} \label{eq:hqs_inversion} \\
+        v_{k+1} &= \argmin_{v} \left\{ \frac{\mu}{2} \|u_{k+1} - v\|_2^2 + \alpha J(v) \right\} \label{eq:hqs_denoising}
+    \end{align}
+    \end{subequations}
+    
+    \pause
+    We have successfully decoupled the forward operator $K$ from the potentially non-linear, non-smooth regulariser $J$.
+\end{frame}
+
+\begin{frame}{Analysing the Sub-Problems}
+    \textbf{1. The Inversion Step for $u_{k+1}$:} \\
+    For Gau\ss ian noise ($F(Ku, f^\delta) = \frac{1}{2}\|Ku - f^\delta\|_2^2$), it rewuires solving the linear system
+    $$ u_{k+1} = (K^*K + \mu I)^{-1} (K^*f^\delta + \mu v_k) \, . $$
+    
+    \pause
+    \vspace{1em}
+    \textbf{2. The Proximal Step for $v_{k+1}$:} \\
+    By dividing by $\mu$, we recognise the definition of the proximal operator for $\frac{\alpha}{\mu} J$, i.e.,
+    $$ v_{k+1} = \operatorname{prox}_{\frac{\alpha}{\mu} J} (u_{k+1}) = \argmin_{v} \left\{ \frac{1}{2} \|v - u_{k+1}\|_2^2 + \frac{\alpha}{\mu} J(v) \right\} $$
+\end{frame}
+
+\section{The Plug-and-Play Heuristic}
+
+\begin{frame}{The Proximal Step as Denoising}
+    Look closely at the $v$-update:
+    $$ v_{k+1} = \argmin_{v} \left\{ \frac{1}{2} \|v - u_{k+1}\|_2^2 + \frac{\alpha}{\mu} J(v) \right\} $$
+    
+    \begin{itemize}
+        \item We seek a vector $v$ that is close to $u_{k+1}$ (in the $\ell^2$ sense).\pause
+        \item We penalise it using $J(v)$.\pause
+        \item \textbf{This is exactly a standard Gau\ss ian denoising problem} (meaning that it is variational regularisation with $K = I$) \pause
+    \end{itemize}
+    
+    If $J(v) = -\log p(v)$, this is the Maximum A-Posteriori (MAP) estimate of $v$ given a noisy observation $u_{k+1}$ with noise variance $\sigma^2 = \alpha/\mu$.
+\end{frame}
+
+\begin{frame}{The Plug-and-Play Insight}
+    \textbf{The Venkatakrishnan et al. (2013) heuristic:}
+    Instead of mathematically deriving the proximal operator for a specific hand-crafted $J$, we replace it with a general, state-of-the-art denoiser $D_\sigma(\cdot)$: 
+
+    $$ v_{k+1} = D_{\sigma_k}(u_{k+1}) $$\pause
+
+    \vspace{-0.2cm}
+    \begin{theoremblock}{Why is this powerful?}
+        \begin{itemize}
+            \item We do not need to know the explicit formulation of $J$.
+            \item We can use highly advanced denoisers (BM3D, Non-Local Means, or deep CNNs like DnCNN, DRUNet).
+            \item The algorithm remains modular: the physics (inversion) and the prior (denoiser) are separated.
+        \end{itemize}
+    \end{theoremblock}
+\end{frame}
+
+\section{PnP Algorithms: HQS and ADMM}
+
+\begin{frame}{PnP-HQS Algorithm}
+    Combining HQS with the PnP heuristic gives us our first practical algorithm.
+    
+    \begin{algorithm}[H]
+    \caption{Plug-and-Play HQS}\label{alg:pnphqs}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} Data $f^\delta$, Operator $K$, Denoiser $D_\sigma$, Params $\mu, \alpha$
+    \State \textbf{Initialise:} $v_0 = f^\delta$, $u_0 = K^\ast f^\delta$
+    \For{$k = 1, \dots, N$}
+        \State \textbf{1. Inversion:} \ \ \ $u_{k+1} = (K^*K + \mu I)^{-1} (K^*f^\delta + \mu v_k)$
+        \State \textbf{2. Denoising:} \ \ $\sigma = \sqrt{\alpha / \mu}$
+        \State \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ $v_{k+1} = D_{\sigma}(u_{k+1})$
+    \EndFor
+    \State \textbf{Return:} $u_{N}$
+    \end{algorithmic}
+    \end{algorithm}
+\end{frame}
+
+\begin{frame}{PnP-ADMM: Better Convergence}
+    While HQS is simple, ADMM handles constraints properly and avoids the pitfalls of penalty methods (where $\mu \to \infty$ is needed for $u=v$).
+    
+    Recall the Augmented Lagrangian for ADMM (substituting multiplier with scaled $w$):
+    $$ \mathcal{L}_\mu(u, v; w) = \frac12 \| Ku - f^\delta \|^2 + \alpha J(v) + \mu \langle w, u - v \rangle + \frac{\mu}{2} \| u - v \|^2 \, . $$
+    
+    The classical ADMM updates then read
+    \begin{align*}
+        u_{k+1} &= (K^*K + \mu I)^{-1} (K^*f^\delta + \mu (v_k -  w_k)) \, , \\
+        v_{k+1} &= \operatorname{prox}_{\frac{\alpha}{\mu} J}(u_{k + 1} + w_k) \, , \\
+        w_{k+1} &= w_k + (u_{k+1} - v_{k+1}) \, . 
+    \end{align*}
+\end{frame}
+
+\begin{frame}{PnP-ADMM Algorithm}
+    Replacing the proximal map with $D_\sigma$ yields:
+    
+    \begin{algorithm}[H]
+    \caption{Plug-and-Play ADMM}\label{alg:pnpadmm}
+    \begin{algorithmic}[1]
+    \State \textbf{Input:} Data $f^\delta$, Operator $K$, Denoiser $D_\sigma$, Params $\mu, \alpha$
+    \State \textbf{Initialise:} $u_0 = K^\ast f^\delta$, $v_0 = f^\delta$, $w_0 = 0$
+    \For{$k = 1, \dots, N$}
+        \State \textbf{1. Inversion:} \ \ \ \ $u_{k+1} = (K^*K + \mu I)^{-1} (K^*f^\delta + \mu(v_k - w_k))$
+        \State \textbf{2. Denoising:} \ \ \ $\sigma = \sqrt{\alpha / \mu}$
+        \State \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ $v_{k+1} = D_{\sigma}(u_{k+1} + w_k)$
+        \State \textbf{3. Dual Update:} $w_{k+1} = w_k + (u_{k+1} - v_{k+1})$
+    \EndFor
+    \State \textbf{Return:} $u_{N}$
+    \end{algorithmic}
+    \end{algorithm}
+\end{frame}
+
+\begin{frame}{Practical Parameter Tuning}
+    \textbf{The $\sigma$ vs $\alpha$ problem:}
+    In theory, the MAP interpretation strictly requires the denoiser noise level to be $\sigma = \sqrt{\alpha/\mu}$.
+    
+    \vspace{1em}
+    \textbf{In Practice:}
+    When using deep denoisers (like DRUNet), it is often beneficial to \textbf{decrease $\sigma$} progressively over iterations (Continuation Method).
+    
+    \begin{itemize}
+        \item \textbf{Early iterations (Large $\sigma$):} Removes heavy artifacts and poor initialisations.
+        \item \textbf{Late iterations (Small $\sigma$):} Refines fine details without washing away textures.
+    \end{itemize}
+\end{frame}
+
+\section{PnP with Bregman Iterations}
+
+\begin{frame}{Iterative Regularisation \& Constrained Formulation}
+    Instead of manually decaying $\sigma$ to restore textures, is there a more principled mathematical alternative?
+    
+    We can change the objective to a \textbf{strictly constrained formulation}:
+    $$ \min_{u, v} J(v) \quad \text{subject to} \quad Ku = f^\delta \quad \text{and} \quad u = v $$
+    
+    We introduce two scaled dual variables:
+    \begin{itemize}
+        \item $w_1$ to enforce data consistency ($Ku = f^\delta$).
+        \item $w_2$ to enforce variable splitting ($u = v$).
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{PnP-Bregman: Algorithm}
+    This leads to the \textbf{PnP-Bregman} algorithm:
+    
+    \begin{algorithm}[H]
+    \caption{Plug-and-Play Constrained ADMM (PnP-Bregman)}
+    \begin{algorithmic}[1]
+    \State \textbf{1. Inversion:}
+    \State $u_{k+1} = (K^*K + I)^{-1} \big( K^*(f^\delta - w_{1,k}) + (v_k - w_{2,k}) \big)$
+    \State \textbf{2. Denoising:} \ \ $v_{k+1} = D_{\sigma}(u_{k+1} + w_{2,k})$
+    \State \textbf{3. Dual Updates:}
+    \State $w_{1, k+1} = w_{1, k} + (K u_{k+1} - f^\delta)$ \hfill $\gets$ \textit{Bregman correction}
+    \State $w_{2, k+1} = w_{2, k} + (u_{k+1} - v_{k+1})$
+    \State \textbf{4. Early Stopping Check:} break if $\|Ku_{k+1} - f^\delta\|_2^2 \le \tau \sigma_{\text{noise}}^2$
+    \end{algorithmic}
+    \end{algorithm}
+\end{frame}
+
+\begin{frame}{Why use PnP-Bregman?}
+    \begin{theoremblock}{Advantages of the Bregman Formulation}
+        \begin{itemize}
+            \item \textbf{Fixed Noise Level:} The dual variable $w_1$ acts as a Bregman iteration, systematically re-injecting lost contrast back into the inversion step. Therefore, $\sigma$ can be kept \textbf{fixed}.
+            \item \textbf{Iterative Regularisation:} It forces $Ku \to f^\delta$ as $k \to \infty$. 
+            \item \textbf{Early Stopping:} Because it will eventually fit the noise, we must stop early using Morozov's discrepancy principle \cite{morozov1966solution}.
+        \end{itemize}
+    \end{theoremblock}
+\end{frame}
+
+\section{Theoretical Guarantees of PnP}
+
+\begin{frame}{The Convergence Problem}
+    While empirical success is undeniable, mathematical guarantees are difficult.
+    
+    Classical splitting proofs rely on $J$ being proper, closed, and convex, ensuring the proximal map is the resolvent of a monotone operator.
+    
+    \vspace{1em}
+    \textbf{The Catch:} When we plug in $D_\sigma(\cdot)$, we break this assumption. Most CNN denoisers do not correspond to the proximal operator of \emph{any} underlying functional $J$. 
+    
+    \vspace{1em}
+    Two paradigms exist to recover convergence:
+    \begin{enumerate}
+        \item The Optimisation Perspective.
+        \item The Fixed-Point Perspective.
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{1. The Optimisation Perspective}
+    By Moreau's Theorem, $D_\sigma$ is a proximal operator if and only if:\vspace{0.2cm} 
+    \begin{enumerate}
+        \item It is non-expansive (Lipschitz constant $L \le 1$).
+        \item \textbf{Symmetric Jacobian:} $\nabla D_\sigma(x)$ must be symmetric.
+    \end{enumerate}
+    
+    \vspace{0.2cm} 
+    Jacobian symmetry means $D_\sigma$ is a conservative vector field (gradient of a scalar potential).\vspace{0.2cm} 
+    
+    \textbf{Problem:} Standard denoisers (BM3D, NLM, UNets) have highly asymmetric Jacobians. To use this perspective, we must design specific custom CNN architectures that mathematically guarantee symmetry.
+\end{frame}
+
+\begin{frame}{2. The Fixed-Point Perspective (Consensus)}
+    If we abandon the need for an underlying objective $J$, we can treat PnP as finding a \textbf{fixed point} (consensus equilibrium): $v^* = T(v^*)$.\vspace{0.2cm} 
+    
+    For PnP-HQS, the operator is:
+    $$ T = D_\sigma \circ \operatorname{prox}_{G/\mu} $$
+    
+    Convergence relies entirely on the Lipschitz constant $L_D$ of the denoiser:
+    \begin{itemize}
+        \item \textbf{Strict Contraction ($L_D < 1$):} Converges uniquely by the Banach Fixed-Point Theorem.
+        \item \textbf{Non-Expansive ($L_D = 1$):} Converges via the Krasnosel'skii-Mann (KM) theorem (requires an averaging/relaxation step).
+    \end{itemize}
+    
+    \vspace{0.2cm} 
+    \textbf{Solution:} Train CNNs with spectral normalisation to enforce $L_D \le 1$.
+\end{frame}
+
+\section{Gradient Step Denoisers (GSD)}
+
+\begin{frame}{Bridging Theory and Practice}
+    We have a conflict:
+    \begin{itemize}
+        \item \textbf{Theory:} Requires non-expansive denoisers with symmetric Jacobians ($D = \nabla \phi$).
+        \item \textbf{Practice:} Standard CNNs (DnCNN, DRUNet) are not conservative fields.
+    \end{itemize}
+
+    \textbf{Solution:} Instead of using a standard CNN, define the denoiser explicitly as a gradient descent step on a learned convex potential $g_\Theta$, i.e.,
+    $$ D_\sigma(u) = u - \tau \nabla g_\Theta(u) $$
+\end{frame}
+
+\begin{frame}{Properties of GSD}
+    If we parameterise $D_\sigma(u) = u - \nabla g_\Theta(u)$ using an Input-Convex Neural Network (ICNN) for $g_\Theta$, then
+
+    \begin{enumerate}
+        \item \textbf{Symmetry:} The Jacobian is $\nabla D = I - \nabla^2 g_\Theta$. Hessian matrices $\nabla^2 g$ are always symmetric!
+        \item \textbf{Conservative Field:} The denoiser is the gradient of the potential $\phi(u) = \frac{1}{2}\|u\|^2 - g_\Theta(u)$.
+        \item \textbf{PnP becomes PDS:} The PnP algorithm becomes mathematically equivalent to \textbf{Primal-Dual Splitting} on the functional $F + g_\Theta$.
+    \end{enumerate}
+    
+    This restores the variational interpretation we lost when switching to PnP.
+\end{frame}
+
+\section{Summary \& Outlook}
+
+\begin{frame}{Summary}
+    \begin{itemize}
+        \item \textbf{Plug-and-Play (PnP)} allows us to use state-of-the-art denoisers within classical splitting algorithms (HQS, ADMM).
+        \item \textbf{PnP-Bregman} provides a constrained formulation that respects the noise level and allows for early stopping.
+        \item \textbf{Gradient Step Denoisers} offer a middle ground: parameterising the denoiser as $u - \nabla g(u)$ recovers the symmetric Jacobian property required for optimization theory.
+        \item \textbf{Convergence:} Without GSDs, we must rely on Fixed-Point theory (Contractive/Non-expansive operators) rather than variational minimization.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Outlook}
+    In the next two lectures, we will cover:
+    
+    \begin{itemize}
+        \item \textbf{Regularisation by Denoising (RED):} Can we explicitly define a regularisation functional using the denoiser? We will explore the mathematics and the "Jacobian critique" behind this approach.
+        \item \textbf{Probabilistic Perspectives:} We will introduce Tweedie's formula, connecting these deterministic root-finding algorithms to score-matching, Langevin dynamics, and modern Diffusion Models.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[allowframebreaks]{References}
+    \bibliographystyle{abbrv}
+    \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}
