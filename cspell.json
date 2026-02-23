@@ -1,0 +1,12 @@
+{
+  "version": "0.2",
+  "language": "en-GB",
+  "dictionaryDefinitions": [
+    {
+      "name": "course-words",
+      "path": "./.vscode/cspell-words.txt",
+      "addWords": true
+    }
+  ],
+  "dictionaries": ["course-words"]
+}
