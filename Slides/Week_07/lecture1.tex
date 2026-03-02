@@ -101,7 +101,7 @@
 \section{Introduction \& The Memory Bottleneck}
 
 \begin{frame}{Recap: Algorithm Unrolling}
-    In the previous chapter, we explored the paradigm of \textbf{algorithm unrolling}:
+    In Week 5, we explored the paradigm of \textbf{algorithm unrolling}:
     
     \begin{itemize}
         \item We bridged classical iterative optimisation with deep learning.
@@ -131,7 +131,7 @@
 \begin{frame}{The Perspective Shift}
     Furthermore, relying on discrete iterative steps obscures the underlying continuous physics of the learning process.\vspace{1em}
     
-    \textbf{The Solution:} We initiate a profound perspective shift.
+    \textbf{The Solution:} We initiate a profound shift in perspective \cite{e2017proposal, haber2017stable}.
     \begin{itemize}
         \item We will reframe deep learning not as a sequence of discrete algebraic layers, but as a problem of \textbf{continuous dynamical systems}.
         \item By taking the infinitesimal limit of deep residual networks, we arrive at continuous-time Ordinary Differential Equations (ODEs).
@@ -143,12 +143,13 @@
 \begin{frame}{Generic Layer Transitions}
     To understand this continuous limit, let us examine the mathematical structure of a single discrete neural network layer.\vspace{1em}
     
-    A generic layer transition is typically modelled as:
+    A generic layer transition is typically modelled as
     $$u^{l+1}=G\left(h(u^l)+\mathcal{F}(u^l,\Theta_l)\right)$$
     
     \begin{itemize}
         \item $u^l \in \mathbb{R}^d$: Input state vector at layer $l$.
         \item $\Theta_l$: Learnable parameters (weights, biases).
+        \item $\mathcal{F}$: Parameterised mapping (e.g., convolution or affine operations followed by nonlinear activation functions) representing the core transformation block.
         \item $G, h$: Mapping functions (e.g., non-linear activations, normalisation).
     \end{itemize}
 \end{frame}
@@ -158,19 +159,19 @@
     
     For a deep network to remain trainable via gradient descent, the mapping from layer $l$ to $l+1$ must remain stable. 
     
-    Mathematically, the gradient of the transition must be close to the identity matrix:
+    Mathematically, the gradient of the transition must be close to the identity matrix, i.e.,
     $$\nabla G\nabla h\sim I$$
     
     If eigenvalues deviate significantly from one, perturbations will either decay to zero (\textbf{vanishing}) or grow exponentially (\textbf{exploding}).
 \end{frame}
 
 \begin{frame}{ResNets as Stable Additive Perturbations}
-    \textbf{Residual Networks (ResNets)} naturally fulfil this stability condition.\vspace{1em}
+    \textbf{Residual Networks (ResNets)} better fulfil this stability condition.\vspace{1em}
     
-    By setting $G(x) = x$ and $h(x) = x$, the update rule becomes a simple additive perturbation to the identity map:
-    $$u^{l+1}=u^l+\mathcal{F}(u^l,\Theta_l)$$
+    By setting $G(x) = x$ and $h(x) = x$, the update rule becomes a simple additive perturbation to the identity map
+    $$u^{l+1}=u^l+\mathcal{F}(u^l,\Theta_l) \, . $$
     
-    This ensures that $\nabla_{u^l}u^{l+1}=I+\nabla_{u^l}\mathcal{F}(u^l,\Theta_l)$, strongly regularising the flow of gradients and allowing for the training of networks with hundreds of layers.
+    This ensures that $\nabla_{u^l}u^{l+1}=I+\nabla_{u^l}\mathcal{F}(u^l,\Theta_l)$, regularising the flow of gradients and allowing for the training of networks with hundreds of layers.
 \end{frame}
 
 \begin{frame}{Deriving the Continuous ODE (1/2)}
@@ -191,12 +192,14 @@
         \item The hidden states $u^l$ transition into a \textbf{continuous trajectory} $u(t)$.
         \item The discrete parameters $\Theta_l$ become a \textbf{continuous control variable} $\Theta(t)$.
     \end{itemize}
+    \vspace{1em}
+    \small{Note: See earlier works unifying ODEs and deep learning, e.g., \cite{e2017proposal, haber2017stable, benning2019deep}.}
 \end{frame}
 
 \begin{frame}{Initial Value Problem Formulation}
-    By taking the infinitesimal limit, the difference quotient becomes a time derivative, governed by the initial value problem:
+    By taking the infinitesimal limit, the difference quotient becomes a time derivative, governed by the initial value problem
     
-    $$\frac{d}{dt}u(t)=\mathcal{F}\left(u(t),\Theta(t)\right)\quad\text{for }t\in[0,T]$$
+    $$\frac{d}{dt}u(t)=\mathcal{F}\left(u(t),\Theta(t)\right)\quad\text{for }t\in[0,T] \, .$$
     
     \textbf{Initial Condition:} $u(0) = u_0$ (where $u_0$ is the input data).\vspace{1em}
     
@@ -210,17 +213,17 @@
     \begin{itemize}
         \item We ensure the learning problem remains well-posed.
         \item If the vector field $\mathcal{F}(u, \Theta(t))$ is appropriately constrained, the flow remains bounded and stable from $u(0)$ to $u(T)$.
-        \item This continuous perspective systematically overcomes the numerical instabilities inherent in standard learning algorithms.
+        \item This continuous perspective can overcome the numerical instabilities inherent in standard learning algorithms.
     \end{itemize}
 \end{frame}
 
 \section{Deep Learning as Continuous Optimal Control}
 
 \begin{frame}{Transforming Supervised Learning}
-    By formally interpreting the neural network as a continuous dynamical system, the supervised training process is mathematically transformed into an \textbf{optimal control problem}.
+    By formally interpreting the neural network as a continuous dynamical system, the supervised training process is mathematically transformed into an \textbf{optimal control problem} \cite{benning2019deep, e2017proposal}.
     
     \vspace{1em}
-    Instead of finding a discrete set of matrices to minimise a sum, our objective is to find an \emph{optimal continuous control trajectory} $\Theta(t)$ that steers the dynamical system to a desired terminal state at time $t=T$.
+    Instead of finding a discrete set of parameters, our objective is to find an \emph{optimal continuous control trajectory} $\Theta(t)$ that steers the dynamical system to a desired terminal state $u(T)$ at time $t=T$.
 \end{frame}
 
 \begin{frame}{Advantages of the Continuous Perspective}
@@ -246,9 +249,9 @@
 \end{frame}
 
 \begin{frame}{The Continuous State Evolution Constraint}
-    This minimisation is subject to the fundamental ODE constraint governing the continuous state evolution:
+    This minimisation is subject to the fundamental ODE constraint governing the continuous state evolution
     
-    $$\frac{d}{dt}u(t)=\mathcal{F}\left(u(t),\Theta(t)\right)\quad\text{for }t\in(0,T]$$
+    $$\frac{d}{dt}u(t)=\mathcal{F}\left(u(t),\Theta(t)\right)\quad\text{for }t\in(0,T] \, , $$
     
     with initial condition $u(0) = u_0$.
     \vspace{1em}
@@ -257,15 +260,14 @@
 \end{frame}
 
 \begin{frame}{Example: Training a Classifier on Data}
-    Suppose we have a dataset of $m$ input-output pairs $(x_i, y_i) \in \mathbb{R}^d \times \mathbb{R}$. We construct the terminal cost function $\mathcal{M}$ (empirical risk) and a running cost $\mathcal{R}$ (Tikhonov regularisation):
-    
+    Suppose we have a dataset of $m$ input-output pairs $(x_i, y_i) \in \mathbb{R}^d \times \{0,1\}$. We construct the terminal cost function $\mathcal{M}$ (empirical risk) and a running cost $\mathcal{R}$ (Tikhonov regularisation) via
     \begin{align*}
         \mathcal{M}(u(T))&:=\frac{1}{m}\sum_{i=1}^m\left|\mathcal{C}\left(Wu_i(T)+\mu\right)-y_i\right|^2\\
         \mathcal{R}(u(t),\Theta(t))&:=\frac{\lambda}{2}\|\Theta(t)\|_2^2
     \end{align*}
     
-    \textbf{Optimal Control Problem:}
-    $$\min_{\Theta,u,W,\mu}\left\{\frac{1}{m}\sum_{i=1}^m\left|\mathcal{C}\left(Wu_i(T)+\mu\right)-y_i\right|^2+\frac{\lambda}{2}\int_0^T\|\Theta(t)\|_2^2\,dt\right\}$$
+    where $\mathcal{C}(z) = 1/(1 + \exp(-z))$ is the standard logistic sigmoid function. This yields the \textbf{Optimal Control Problem}
+    $$\min_{\Theta,u,W,\mu}\left\{\frac{1}{m}\sum_{i=1}^m\left|\mathcal{C}\left(Wu_i(T)+\mu\right)-y_i\right|^2+\frac{\lambda}{2}\int_0^T\|\Theta(t)\|_2^2\,dt\right\} \, , $$
     subject to $\frac{d}{dt}u_i(t) = \mathcal{F}(u_i(t), \Theta(t))$ and $u_i(0) = x_i$.
 \end{frame}
 
@@ -274,7 +276,7 @@
     
     \begin{figure}[htpb]
         \centering
-        \includegraphics[width=0.4\textwidth]{../Common_Images/optimalcontrol/example_spiral2d} 
+        \includegraphics[width=0.38\textwidth]{../Common_Images/optimalcontrol/example_spiral2d} 
         \caption{A 2D binary classification toy dataset (spirals). The network learns a flow that disentangles the two classes over the time horizon $T$.}
     \end{figure}
 \end{frame}
@@ -312,39 +314,40 @@
 \begin{frame}{Gradient-Based Optimisation}
     To perform gradient-based numerical optimisation, we need to know how the final cost $\mathcal{J}$ reacts to continuous changes in the control signal $\Theta(t)$.\vspace{1em}
     
-    Rather than calculating this via cumbersome standard variational calculus and chain rules, we employ \textbf{Lagrange multipliers}. 
+    Similar to previous weeks, we employ \textbf{Lagrange multipliers}. 
     \vspace{1em}
     
     This elegantly reformulates the constrained optimal control problem into an \emph{unconstrained saddle-point problem}.
 \end{frame}
 
 \begin{frame}{The Adjoint State $p(t)$}
-    We introduce a continuous-time Lagrange multiplier $p(t) \in \mathcal{U}$, referred to in optimal control terminology as the \textbf{adjoint state} (or co-state). \vspace{1em}
+    We introduce a continuous-time Lagrange multiplier $p(t) \in \mathcal{U}^\ast$, referred to in optimal control terminology as the \textbf{adjoint state} (or co-state). \vspace{1em}
     
     The Lagrangian functional $\mathcal{L}(u, \Theta, p)$ is defined by appending the ODE constraint to the generic cost functional via an $L^2$-inner product integrated over the entire time horizon.
 \end{frame}
 
 \begin{frame}{Formulating the Unconstrained Lagrangian}
+    Writing this in mathematical terms, we define
     \begin{align*}
         \mathcal{L}(u,\Theta,p)&:=\mathcal{M}\left(u(T)\right)+\int_0^T\mathcal{R}\left(u(t),\Theta(t)\right)\,dt\\
-        &\quad-\int_0^T\left\langle p(t),\frac{d}{dt}u(t)-\mathcal{F}\left(u(t),\Theta(t)\right)\right\rangle_{\mathcal{U}}\,dt
+        &\quad-\int_0^T\left\langle p(t),\frac{d}{dt}u(t)-\mathcal{F}\left(u(t),\Theta(t)\right)\right\rangle_{\mathcal{U}}\,dt \, .
     \end{align*}
     
     To make it easier to take derivatives with respect to $u(t)$, we must isolate $u(t)$ from its time derivative.
 \end{frame}
 
 \begin{frame}{Integration by Parts}
-    We isolate $u(t)$ by applying integration by parts to the first half of the constraint integral:
+    We isolate $u(t)$ by applying integration by parts to the first half of the constraint integral to obtain
     
     \begin{theoremblock}{Integration by Parts}
-    $$\int_0^T\left\langle p(t),\frac{d}{dt}u(t)\right\rangle_{\mathcal{U}}\,dt=\langle p(T),u(T)\rangle_{\mathcal{U}}-\langle p(0),u(0)\rangle_{\mathcal{U}}-\int_0^T\left\langle\frac{d}{dt}p(t),u(t)\right\rangle_{\mathcal{U}}\,dt$$
+    $$\int_0^T\left\langle p(t),\frac{d}{dt}u(t)\right\rangle_{\mathcal{U}}\,dt=\langle p(T),u(T)\rangle_{\mathcal{U}}-\langle p(0),u(0)\rangle_{\mathcal{U}}-\int_0^T\left\langle\frac{d}{dt}p(t),u(t)\right\rangle_{\mathcal{U}}\,dt \, . $$
     \end{theoremblock}
     
     This operation shifts the time derivative from the state variable $u(t)$ onto the adjoint state $p(t)$.
 \end{frame}
 
 \begin{frame}{Isolating the State Variable}
-    Substituting this back yields the equivalent formulation:
+    Substituting this back yields the equivalent formulation
     
     \begin{align*}
         \mathcal{L}(u,\Theta,p)&=\mathcal{M}\left(u(T)\right)-\langle p(T),u(T)\rangle_{\mathcal{U}}+\langle p(0),u_0\rangle_{\mathcal{U}}\\
@@ -355,19 +358,19 @@
 \end{frame}
 
 \begin{frame}{First-Order Optimality: The State Equation}
-    First, taking the gradient with respect to the multiplier $p(t)$ simply recovers our original forward state equation:
+    First, taking the gradient with respect to the multiplier $p(t)$ simply recovers our original forward state equation
     
-    $$\nabla_p\mathcal{L}=0\quad\implies\quad\frac{d}{dt}u(t)=\mathcal{F}\left(u(t),\Theta(t)\right)$$
+    $$\nabla_p\mathcal{L}=0\quad\implies\quad\frac{d}{dt}u(t)=\mathcal{F}\left(u(t),\Theta(t)\right) \, , $$
     
     with the initial condition $u(0) = u_0$.
 \end{frame}
 
 \begin{frame}{First-Order Optimality: The Adjoint Equation}
-    Taking the variation with respect to the state variable $u$ yields the adjoint equation. At the terminal boundary $u(T)$:
-    $$\nabla_{u(T)}\mathcal{L}=0\quad\implies\quad p(T)=\nabla_u\mathcal{M}\left(u(T)\right)$$
+    Taking the variation with respect to the state variable $u$ yields the adjoint equation. At the terminal boundary $u(T)$ we have
+    $$\nabla_{u(T)}\mathcal{L}=0\quad\implies\quad p(T)=\nabla_u\mathcal{M}\left(u(T)\right) \, . $$
     
-    For the continuous interval $(0, T)$:
-    $$\nabla_{u(t)}\mathcal{L}=0\quad\implies\quad-\frac{d}{dt}p(t)=\left(\partial_u\mathcal{F}(u(t),\Theta(t))\right)^*p(t)+\nabla_u\mathcal{R}\left(u(t),\Theta(t)\right)$$
+    For the continuous interval $(0, T)$, we get
+    $$\nabla_{u(t)}\mathcal{L}=0\quad\implies\quad-\frac{d}{dt}p(t)=\left(\partial_u\mathcal{F}(u(t),\Theta(t))\right)^*p(t)+\nabla_u\mathcal{R}\left(u(t),\Theta(t)\right) \, . $$
     
     Notice that the adjoint state evolves \textbf{backwards in time}. This serves as the continuous-time analogue of discrete backpropagation!
 \end{frame}
@@ -377,7 +380,7 @@
     
     $$\nabla_{\Theta(t)}\mathcal{L}=0\quad\implies\quad\left(\partial_\Theta\mathcal{F}(u(t),\Theta(t))\right)^*p(t)+\nabla_\Theta\mathcal{R}\left(u(t),\Theta(t)\right)=0$$
     
-    During gradient-based training, if we have not yet converged, the left-hand side directly supplies the continuous gradient $\nabla_{\Theta(t)}\mathcal{J}$ required to equivalently update $\Theta(t)$.
+    During gradient-based training, if we have not yet converged, the left-hand side directly supplies the continuous gradient $\nabla_{\Theta(t)}\mathcal{J}$ required to update $\Theta(t)$.
 \end{frame}
 
 \begin{frame}{The Hamiltonian}
@@ -394,13 +397,39 @@
 \end{frame}
 
 \begin{frame}{Pontryagin's Minimum Principle}
-    This theoretical architecture forms the backbone of \textbf{Pontryagin's Minimum Principle}.
+    This theoretical architecture forms the backbone of \textbf{Pontryagin's Minimum Principle} \cite{benning2019deep}.
     \vspace{1em}
     
     It states that for a control trajectory to be optimal, the Hamiltonian must be strictly minimised across the state variables for almost every time $t \in [0, T]$.
     \vspace{1em}
     
     This produces a deterministic \textbf{two-point boundary value problem}. Because we have fixed boundaries at opposite sides of the temporal domain ($u(0)$ and $p(T)$), resolving the continuous parameter gradients necessitates solving the forward state ODE to evaluate $u(T)$, before the backward adjoint ODE can be integrated from $T$ down to $0$.
+\end{frame}
+
+\begin{frame}{Summary of this Lecture}
+    \begin{itemize}
+        \item We reframed deep residual networks as \textbf{continuous dynamical systems} by taking the infinitesimal-depth limit.
+        \item We connected the ResNet update to a \textbf{forward Euler discretisation} of the ODE $\frac{d}{dt} u(t)=\mathcal{F}(u(t),\Theta(t))$.
+        \item We cast supervised learning as a \textbf{continuous optimal control problem} with terminal and running costs.
+        \item We derived the \textbf{Lagrangian}, state equation, adjoint equation, and control optimality condition.
+        \item We showed how these conditions are compactly represented through the \textbf{Hamiltonian} and Pontryagin's principle.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Outlook: Next Lecture}
+    In the next lecture, we move from the continuous theory to practical computation.
+    \vspace{0.8em}
+    \begin{itemize}
+        \item We will discretise the coupled state -- adjoint system using \textbf{Runge-Kutta} and \textbf{Partitioned Runge-Kutta (PRK)} methods.
+        \item We will study \textbf{symplectic PRK} conditions that ensure consistency between optimise-then-discretise and discretise-then-optimise viewpoints.
+        \item We will connect these ideas to \textbf{ODENets} with learnable time steps.
+        \item We will then apply the framework to \textbf{Variational Networks} for inverse problems and medical imaging.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[allowframebreaks]{References}
+    \bibliographystyle{abbrv}
+    \bibliography{../../Lecture_Notes/references}
 \end{frame}
 
 \end{document}

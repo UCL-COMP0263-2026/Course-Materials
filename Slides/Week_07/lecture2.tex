@@ -20,6 +20,7 @@
 \setbeamertemplate{navigation symbols}{\vspace{-2ex}}
 \setbeamertemplate{footline}[author title date]
 \setbeamertemplate{slide counter}[framenumber/totalframenumber]
+\setbeamertemplate{caption}{\raggedright\insertcaption\par}
 
 \usepackage[utf8]{inputenc}
 \usepackage[british]{babel} % British spelling
@@ -36,6 +37,8 @@
 \usepackage{algpseudocode}
 \usepackage{xcolor}
 \usepackage{subcaption}
+\captionsetup[figure]{labelformat=empty,labelsep=none}
+\usepackage[export]{adjustbox}
 
 % Define custom colours
 \makeatletter
@@ -106,7 +109,7 @@
     There are two competing paradigms in numerical optimal control:
     \begin{enumerate}
         \item \textbf{``First-discretise-then-optimise'':} Standard deep learning approach. Discretise the network into fixed layers and calculate discrete gradients via backpropagation.
-        \item \textbf{``First-optimise-then-discretise'':} Derive the continuous adjoint equations first (as we did in Block 1), and \emph{then} discretise the resulting boundary value problem using numerical ODE solvers \cite{benning2019deep}.
+        \item \textbf{``First-optimise-then-discretise'':} Derive the continuous adjoint equations first (as we did in Lecture 1 of this week), and \emph{then} discretise the resulting boundary value problem using numerical ODE solvers \cite{benning2019deep}.
     \end{enumerate}
 \end{frame}
 
@@ -140,22 +143,33 @@
     To handle this, we employ a \textbf{Partitioned Runge-Kutta (PRK)} method. This applies one RK scheme to the forward equation, and a distinct, matched RK scheme (with weights $\tilde{b}_i$ and matrix $\tilde{a}_{i,j}$) to the backward adjoint equation.
 \end{frame}
 
+\begin{frame}{Backward Runge-Kutta for the Adjoint}
+    The matching backward RK scheme for the adjoint equation computes the continuous backpropagation step via intermediate stages $P_i^l$:
+    
+    \begin{align*}
+        P_i^l &= p^l + \Delta t \sum_{j=1}^s \tilde{a}_{i,j} \ell_j^l \, , \quad i = 1, \dots, s \, , \\
+        p^{l+1} &= p^l + \Delta t \sum_{i=1}^s \tilde{b}_i \ell_i^l \, , 
+    \end{align*}
+    
+    where $\ell_i^l = -\left(\partial_u \mathcal{F}(U_i^l, \Theta_i^l)\right)^* P_i^l$ represents the stage derivatives for the adjoint state.
+\end{frame}
+
 \begin{frame}{Symplectic Partitioned Runge-Kutta}
-    Remarkably, the ``first-discretise'' and ``first-optimise'' approaches \textbf{perfectly commute} if the chosen discretisation scheme is a \textbf{symplectic} PRK method \cite{benning2019deep, hager2000runge}.
+    Remarkably, the ``first-discretise'' and ``first-optimise'' approaches \textbf{perfectly commute} if the chosen discretisation scheme is a \textbf{symplectic} PRK method \cite{hager2000runge,benning2019deep}.
     
     \begin{theoremblock}{Symplectic Conditions}
     For a PRK to be symplectic, it must preserve the discrete inner product $\langle p^{l+1}, v^{l+1} \rangle = \langle p^l, v^l \rangle$. This algebraically requires:
     $$ b_i = \tilde{b}_i \quad \text{and} \quad b_i\tilde{a}_{i,j} + \tilde{b}_j a_{i,j} - b_i\tilde{b}_j = 0 \quad \text{for all } i, j = 1, \dots, s \, . $$
     \end{theoremblock}
     
-    When these hold, numerical gradients evaluated from the continuous adjoint approach exactly match true analytical backpropagation gradients!
+    When these hold, numerical gradients evaluated from the continuous adjoint approach match true analytical backpropagation gradients.
 \end{frame}
 
 \begin{frame}{Example: The Symplectic Euler Method}
     Consider the simplest symplectic PRK. Rather than using forward Euler for both passes, we pair the \emph{explicit} Euler for the state with the \emph{implicit} Euler for the adjoint.
     
     For a single stage ($s=1$), the forward explicitly uses $b_1 = 1, a_{1,1} = 0$.
-    By the symplectic conditions, we must have:
+    By the symplectic conditions, we must have
     \begin{itemize}
         \item $\tilde{b}_1 = b_1 = 1$
         \item $1 \cdot \tilde{a}_{1,1} + 1 \cdot 0 - 1 \cdot 1 = 0 \implies \tilde{a}_{1,1} = 1$ (Implicit Euler)
@@ -184,29 +198,28 @@
 \begin{frame}{Learnable Time Steps}
     By treating deep learning as an ODE, the ``time step'' $\Delta t$ between layers is no longer a fixed hyperparameter but can become a \textbf{learnable parameter} $\alpha$.
     
-    In the \textbf{ODENet} architecture, the control set is expanded to $\Theta = (W, \beta, \alpha)$, such that the flow is given by:
-    $$ \mathcal{F}(u, \Theta) = \alpha \sigma(W u + \beta) $$
+    In the \textbf{ODENet} architecture, the control set is expanded to $\Theta = (W, \beta, \alpha)$, such that the flow is given by
+    $$ \mathcal{F}(u, \Theta) = \alpha \sigma(W u + \beta) \, . $$
     
     This allows the network to dynamically adjust the integration step size, effectively optimising its own depth mapping \cite{benning2019deep}.
 \end{frame}
 
 \begin{frame}{The Simplex Constraint for Sparsity}
     A powerful variation projects these learnable time steps $\alpha$ onto a probability simplex:
-    $$ \mathcal{S} = \left\{ \alpha \in \mathbb{R}^N \mid \alpha^{[j]} \ge 0, \sum_j \alpha^{[j]} = 1 \right\} $$
+    $$ \mathcal{S} = \left\{ \alpha \in \mathbb{R}^N \mid \alpha^{[j]} \ge 0, \sum_j \alpha^{[j]} = 1 \right\} \, . $$
     
     \begin{itemize}
         \item This projection induces \textbf{extreme sparsity}.
         \item The network automatically sets most time steps to exactly zero.
-        \item It effectively uses only 2 to 3 active layers to solve complex transformations, severely reducing the online memory footprint during inference.
+        \item It effectively uses only few active layers to solve complex transformations, severely reducing the online memory footprint during inference.
     \end{itemize}
 \end{frame}
 
 \begin{frame}{Empirical Results: ODENets}
-    Empirically, freeing the time step allows ODENets to learn complex state space transformations much more aggressively, sometimes even learning non-monotonic dynamics (negative time steps).
-    
+    Empirically, freeing time steps allows ODENets to learn complex state space transformations more aggressively, sometimes even learning non-monotonic dynamics (negative time steps).\vspace{-0.15cm}
     \begin{figure}[htpb]
         \centering
-        \includegraphics[width=0.65\textwidth]{../Common_Images/optimalcontrol/example_squares2d_20layers_backtracking1_seed1_timesteps}
+        \includegraphics[width=0.4\textwidth]{../Common_Images/optimalcontrol/example_squares2d_20layers_backtracking1_seed1_timesteps}
         \caption{Learned time steps for ResNet, ODENet, and ODENet+Simplex. The simplex constraint forces the network to automatically select only a few active layers, zeroing out the rest.}
     \end{figure}
 \end{frame}
@@ -220,26 +233,26 @@
     Instead of analysing a network as a dynamical system, we can \emph{derive} neural architectures directly by discretising the continuous gradient flows of established physical energy functionals. 
     \vspace{1em}
     
-    This leads us to \textbf{Variational Networks (VNs)} \cite{kobler2017variational,hammernik2018learning}, which fuse the rigorous theoretical properties of variational models with the expressiveness of deep learning.
+    This leads to \textbf{Variational Networks (VNs)} \cite{kobler2017variational,hammernik2018learning}, which are another attempt at fusing the rigorous theoretical properties of variational models with the expressiveness of deep learning.
 \end{frame}
 
 \begin{frame}{Energy Minimisation and the Field of Experts}
-    Image reconstruction can be formulated as minimising an energy functional $E(u)$. By parameterising the regulariser using the \textbf{Fields of Experts (FoE)} framework, we obtain:
+    Image reconstruction can be formulated as minimising an energy functional $E(u)$. By parameterising the regulariser using the \textbf{Fields of Experts (FoE)} framework, we obtain
     
-    $$ E(u) = \frac{\lambda}{2} \|K u - f\|_2^2 + \sum_{i=1}^{N_D} \sum_{p=1}^N \rho_i\left((D_i u)_p\right) $$
+    $$ E(u) = \frac{\lambda}{2} \|K u - f^\delta \|_2^2 + \sum_{i=1}^{N_D} \sum_{p=1}^N \rho_i\left((D_i u)_p\right) \, . $$
     
     \begin{itemize}
-        \item $K$: Forward operator (e.g., MRI physics).
+        \item $K$: Forward operator (e.g., MRI physics like the Fourier transform).
         \item $f$: Measured sensor data.
-        \item $D_i$: Set of $N_D$ learned convolutional filters.
+        \item $D_i$: Set of $N_D$ stacked, learned convolutional operators with corresponding filters.
         \item $\rho_i$: Learned, non-linear potential function evaluating the filter responses.
     \end{itemize}
 \end{frame}
 
 \begin{frame}{Parametrising the Potential Functions}
-    To enable highly flexible, data-driven activation functions, the derivatives of the potential functions, $\rho_i^\prime$, are parametrised as a weighted sum of $M$ Gau\ss ian \textbf{Radial Basis Functions (RBFs)}:
+    To enable highly flexible, data-driven activation functions, the derivatives of the potential functions, $\rho_i^\prime$, are parametrised as a weighted sum of $M$ Gau\ss ian \textbf{Radial Basis Functions (RBFs)}, i.e.,
     
-    $$ \rho_i'(x) = \sum_{j=1}^M w_{ij} \exp\left(-\frac{(x - \mu_j)^2}{2\sigma^2}\right) $$
+    $$ \rho_i'(x) = \sum_{j=1}^M w_{ij} \exp\left(-\frac{(x - \mu_j)^2}{2\sigma^2}\right) \, , $$
     
     where $\mu_j$ are equidistant centers and $w_{ij}$ are the learnable weights \cite{hammernik2018learning}.
 \end{frame}
@@ -247,7 +260,7 @@
 \begin{frame}{Incremental Gradient Steps (Unrolling)}
     To minimise the energy $E(u)$, we unroll a discrete gradient descent step. The fundamental update rule for a single Variational Network stage is:
     
-    $$ u^{t+1} = u^t - \left( \sum_{i=1}^{N_D} (D_i^t)^\top \rho_i^{t\prime}(D_i^t u^t) + \lambda^t K^*(K u^t - f) \right) $$
+    $$ u^{t+1} = u^t - \left( \sum_{i=1}^{N_D} (D_i^t)^\top \rho_i^{t\prime}(D_i^t u^t) + \lambda^t K^*(K u^t - f^\delta) \right) $$
     
     \begin{itemize}
         \item Parameters $\Theta^t = \{D_i^t, w_{ij}^t, \lambda^t\}$ can vary across each stage $t$.
@@ -256,10 +269,19 @@
 \end{frame}
 
 \begin{frame}{Variational Network Architecture}
-    \begin{figure}[p]
+    \begin{figure}[htpb]
         \centering
-        \includegraphics[width=0.95\textwidth]{../Common_Images/varnetworks/figure1-vn_overview}
-        \caption{Overview of a Variational Network. The network simulates an unrolled iterative scheme to minimise an energy functional.}
+        \begin{subfigure}{0.48\textwidth}
+            \centering
+            % Top half (trim bottom)
+            \includegraphics[trim=0 {0.82\textheight} 0 0, clip, width=\textwidth]{../Common_Images/varnetworks/figure1-vn_overview}
+        \end{subfigure}\hfill
+        \begin{subfigure}{0.48\textwidth}
+            \centering
+            % Bottom half (trim top)
+            \includegraphics[trim=0 0 0 {1.3\textheight}, clip, width=\textwidth]{../Common_Images/varnetworks/figure1-vn_overview}
+        \end{subfigure}
+        \caption{Overview of a Variational Network. The network simulates an unrolled iterative scheme to minimise an energy functional based on the FoE regularisation functional.}
     \end{figure}
 \end{frame}
 
@@ -267,13 +289,13 @@
 
 \begin{frame}{Convex vs. Non-Convex Limits}
     \begin{theoremblock}{Theoretical Guarantees}
-    By restricting the RBF weights $w_{ij} > 0$ and applying zero-mean constraints to the filters $D_i$, the energy landscape $E(u)$ becomes \textbf{globally convex} \cite{kobler2017variational}.
+    By restricting the RBF weights to $w_{ij} > 0$ and applying zero-mean constraints to the filters $D_i$, the energy landscape $E(u)$ becomes \textbf{globally convex} \cite{kobler2017variational}.
     \end{theoremblock}
     \vspace{1em}
     \textbf{The Trade-off:}
     \begin{itemize}
         \item Convex models guarantee convergence but penalise large gradients too aggressively, leading to overly smoothed images.
-        \item Highly parametrised \textbf{non-convex} VNs consistently outperform them in practice by capturing and preserving complex, high-frequency textures.
+        \item Highly parametrised \textbf{non-convex} VNs consistently outperform them in practice (for in-distribution samples) by capturing and preserving complex, high-frequency textures.
     \end{itemize}
 \end{frame}
 
@@ -285,9 +307,9 @@
 \end{frame}
 
 \begin{frame}{Loss Function Design}
-    To train these complex-to-real models over a dataset of $S$ pairs of undersampled clinical measurements $f_s^\delta$ and fully sampled references $u_s$, the loss function combines a robust $L_1$ norm with a complex-valued Structural Similarity Index (SSIM):
+    To train these complex-to-real models over a dataset of $S$ pairs of undersampled clinical measurements $f_s^\delta$ and fully sampled references $u_s$, the loss function combines a robust $L_1$ norm with a complex-valued Structural Similarity Index (SSIM), i.e.,
     
-    $$ \min_{\Theta} \sum_{s=1}^S \left( \| u_s - u_T(\Theta, f_s^\delta) \|_1 + \gamma \mathcal{L}_{\text{SSIM}}(u_s, u_T(\Theta, f_s^\delta)) \right) $$
+    $$ \min_{\Theta} \sum_{s=1}^S \left( \| u_s - u_T(\Theta, f_s^\delta) \|_1 + \gamma \mathcal{L}_{\text{SSIM}}(u_s, u_T(\Theta, f_s^\delta)) \right) \, , $$
     
     where $\gamma > 0$ balances pixel-wise absolute differences with perceptual structure degradation.
 \end{frame}
@@ -295,8 +317,8 @@
 \begin{frame}{Training Overview}
     \begin{figure}[htpb]
         \centering
-        \includegraphics[width=0.9\textwidth]{../Common_Images/varnetworks/figure2-training_overview.pdf}
-        \caption{Training overview for a Variational Network using paired clinical data to optimise parameters $\Theta$ over unrolled iterations.}
+        \includegraphics[width=0.75\textwidth]{../Common_Images/varnetworks/figure2-training_overview.pdf}
+        \caption{Training overview for a Variational Network using paired clinical data to optimise parameters $\Theta$ over unrolled iterations \cite{hammernik2018learning}.}
     \end{figure}
 \end{frame}
 
@@ -321,18 +343,47 @@
 \end{frame}
 
 \begin{frame}{Robust Generalisation to Unseen Pathologies}
-    Because the network enforces the physical forward operator $K$ continuously at each unrolled step (via data fidelity), it avoids the aggressive hallucination phenomena commonly crippling pure black-box CNNs (like generic U-Nets).
+    Because the network enforces the physical forward operator $K$ at each unrolled step (via data fidelity), it avoids the aggressive hallucination phenomena commonly crippling pure black-box CNNs (like generic U-Nets).
     \vspace{1em}
     
-    In clinical trials, a Variational Network restricted to just $T=10$ stages reliably reconstructed unique clinical pathologies (e.g., complex meniscal tears) that were \textbf{entirely absent} from the training dataset.
+    In clinical trials, a Variational Network restricted to just $T=10$ stages reliably reconstructed unique clinical pathologies (e.g., complex meniscal tears) that were \textbf{entirely absent} from the training dataset (cf. )\cite{hammernik2018learning}).
 \end{frame}
 
-\begin{frame}{Pathology Generalisation Example}
+\begin{frame}{Pathology Generalisation Example (I)}
     \begin{figure}[htpb]
         \centering
-        \includegraphics[width=0.85\textwidth]{../Common_Images/varnetworks/figure7-result_kneeprotocol.pdf}
-        \caption{Despite never having seen a specific meniscal tear during training, the $T=10$ VN successfully reconstructs the exact pathology, outperforming baseline U-Nets that hallucinate away unseen geometric anomalies \cite{hammernik2018learning}.}
+        \includegraphics[trim=0 {1.97\textheight} 0 0, clip, width=0.7\textwidth]{../Common_Images/varnetworks/figure7-result_kneeprotocol.pdf}
+        {\captionsetup{font=footnotesize}\caption{Despite never having seen a specific meniscal tear during training, the $T=10$ VN successfully reconstructs exact pathology, outperforming baseline U-Nets that hallucinate away unseen geometric anomalies \cite{hammernik2018learning}.}}
     \end{figure}
+\end{frame}
+
+\begin{frame}{Pathology Generalisation Example (II)}
+    \begin{figure}[htpb]
+        \centering
+        \includegraphics[trim=0 0 0 {2.05\textheight}, clip, width=0.7\textwidth]{../Common_Images/varnetworks/figure7-result_kneeprotocol.pdf}
+        {\captionsetup{font=footnotesize}\caption{Despite never having seen a specific meniscal tear during training, the $T=10$ VN successfully reconstructs exact pathology, outperforming baseline U-Nets that hallucinate away unseen geometric anomalies \cite{hammernik2018learning}.}}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Summary of this Lecture}
+    \begin{itemize}
+        \item We moved from continuous optimal control theory to \textbf{practical discretisations} using Runge-Kutta and partitioned Runge-Kutta methods.
+        \item We established the \textbf{state--adjoint coupling} as a two-point boundary value problem and introduced backward RK updates for gradient evaluation.
+        \item We highlighted \textbf{symplectic PRK conditions} that ensure consistency between discretise-then-optimise and optimise-then-discretise viewpoints.
+        \item We introduced \textbf{ODENets} with learnable time steps and simplex constraints for sparse, efficient depth usage.
+        \item We connected these ideas to \textbf{Variational Networks} for clinical MRI, including interpretability and robust pathology reconstruction.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Outlook: Next Lecture}
+    In the next lecture, we examine how these variational-network dynamics behave over long optimisation horizons.
+    \vspace{0.8em}
+    \begin{itemize}
+        \item We will analyse the \textbf{early stopping paradox}: why full convergence can degrade perceptual quality.
+        \item We will connect optimisation trajectories to \textbf{modelling errors} and texture loss in inverse problems.
+        \item We will derive an \textbf{optimal-control interpretation} of stopping time as a learnable design variable.
+        \item We will use this perspective to motivate principled stopping strategies in variational-network reconstructions.
+    \end{itemize}
 \end{frame}
 
 \begin{frame}[allowframebreaks]{References}
