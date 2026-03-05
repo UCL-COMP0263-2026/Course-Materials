@@ -112,15 +112,35 @@
     This occurs because even highly expressive, data-driven regularisers cannot perfectly model the true, infinite-dimensional manifold of natural images.
 \end{frame}
 
-\begin{frame}{The Trade-off: Convergence vs. Modelling Errors}
-    There is an inherent trade-off between rigorous mathematical optimisation and modelling errors:
+% \begin{frame}{The Trade-off: Convergence vs. Modelling Errors}
+%     There is an inherent trade-off between rigorous mathematical optimisation and modelling errors:
     
-    \begin{itemize}
-        \item \textbf{Initial Iterations:} Iteratively descending the gradient initially removes noise efficiently.
-        \item \textbf{Late Iterations ($t \to \infty$):} As gradient steps continue indefinitely, modelling errors compound. The algorithm begins to destroy true structural image textures.
-    \end{itemize}
-    \vspace{1em}
-    In hand-crafted regularisers like Total Variation (TV-$L^2$), this manifests as artificial ``staircasing'' effects.
+%     \begin{itemize}
+%         \item \textbf{Initial Iterations:} Iteratively descending the gradient initially removes noise efficiently.
+%         \item \textbf{Late Iterations ($t \to \infty$):} As gradient steps continue indefinitely, modelling errors compound. The algorithm begins to destroy true structural image textures.
+%     \end{itemize}
+%     \vspace{1em}
+%     In hand-crafted regularisers like Total Variation (TV-$L^2$), this manifests as artificial ``staircasing'' effects.
+% \end{frame}
+
+\begin{frame}{The Trade-off: Convergence vs. Modelling Errors}
+    There is an inherent trade-off between rigorous mathematical optimisation and modelling errors.
+    
+    \begin{columns}[c]
+        \begin{column}{0.45\textwidth}
+            \begin{itemize}
+                \item \textbf{Initial ($t$ is small):} Removes noise efficiently.
+                \item \textbf{Late ($t \to \infty$):} Modelling errors compound; destroys true textures (e.g., TV-$L^2$ ``staircasing'').
+            \end{itemize}
+        \end{column}
+        
+        \begin{column}{0.55\textwidth}
+            \begin{figure}
+                \centering
+                \includegraphics[width=\textwidth]{../Common_Images/varnetworks/convergence-trade-off.png}
+            \end{figure}
+        \end{column}
+    \end{columns}
 \end{frame}
 
 \begin{frame}{Visualising the Paradox in TV-$L^2$ Denoising}
@@ -131,7 +151,7 @@
     \end{figure}
 \end{frame}
 
-\begin{frame}{The Need for Finite Depth}
+\begin{frame}{Why Infinite Iterations Degrade Quality}
     This ``early stopping paradox'' persists even in modern Variational Networks.\vspace{1em}
     
     Because infinite unrolled iterations degrade reconstruction quality, ensuring an ideal ``finite depth'' for our VNs becomes strictly paramount. 
@@ -157,15 +177,30 @@
     This elegantly maps the integration bounds to exactly $t \in (0, 1)$, regardless of the actual duration $T$.
 \end{frame}
 
+% \begin{frame}{The Autonomous State ODE}
+%     Applying this reparameterisation, the autonomous state ODE takes the generalised form:
+    
+%     $$ \frac{d}{dt}x(t) = T \mathcal{F}(x(t), \Theta) = T \left( -K^*(Kx(t) - f^\delta) - \sum_{k=1}^{N_D} (D_k)^\top \rho_k'\left(D_k x(t)\right) \right) $$
+    
+%     with the initial condition $x(0) = u_0$.
+%     \vspace{1em}
+    
+%     Notice that $T$ acts as a scalar multiplier scaling the entire velocity vector field.
+% \end{frame}
+
 \begin{frame}{The Autonomous State ODE}
     Applying this reparameterisation, the autonomous state ODE takes the generalised form:
     
-    $$ \frac{d}{dt}x(t) = T \mathcal{F}(x(t), \Theta) = T \left( -K^*(Kx(t) - f^\delta) - \sum_{k=1}^{N_D} (D_k)^\top \rho_k'\left(D_k x(t)\right) \right) $$
+    \pause
+    % Color-coding T in uclred and Theta in uclblue
+    $$ \frac{d}{dt}x(t) = {\color{uclred}T} \mathcal{F}(x(t), {\color{uclblue}\Theta}) = {\color{uclred}T} \left( -K^*(Kx(t) - f^\delta) - \sum_{k=1}^{N_D} (D_k)^\top \rho_k'\left(D_k x(t)\right) \right) $$
     
-    with the initial condition $x(0) = u_0$.
+    with the initial condition $x(0) = u_0$. \pause
     \vspace{1em}
     
-    Notice that $T$ acts as a scalar multiplier scaling the entire velocity vector field.
+    \begin{block}{Geometric Interpretation}
+    Notice that ${\color{uclred}T}$ acts as a scalar multiplier scaling the \textbf{entire velocity vector field} evaluated by the network parameters ${\color{uclblue}\Theta}$.
+    \end{block}
 \end{frame}
 
 \begin{frame}{The New Trajectory Cost Functional}
@@ -188,27 +223,84 @@
 \section{Optimality Conditions for Network Depth}
 
 \begin{frame}{Building the Lagrangian for Depth}
-    To automatically calculate this energy-minimising optimal stopping time via deep learning primitives, we construct the Lagrangian. 
-    \vspace{1em}
+    In direct analogy to Lecture 1, we now write the constrained optimal control problem explicitly as
     
-    We adjoin the reparameterised state equation using the time-dependent, backward-in-time adjoint state $p(t)$, identical to our derivations in Block 1.
+    $$\min_{x,\Theta,{\color{uclred}T}}\;\mathcal{J}(x(1))=\frac{1}{2}\|x(1)-u^\dagger\|_2^2 \, . $$
+    
+    subject to
+    $$\frac{d}{dt}x(t)-{\color{uclred}T}\,\mathcal{F}(x(t),\Theta)=0,\quad x(0)=u_0,\quad t\in(0,1].$$
+    
+    We introduce the adjoint state $p(t)$ and form the Lagrangian
+    $$\mathcal{L}(x,p,\Theta,{\color{uclred}T})=\frac{1}{2}\|x(1)-u^\dagger\|_2^2+\int_0^1\!\left\langle p(t),\frac{d}{dt}x(t)-{\color{uclred}T}\,\mathcal{F}(x(t),\Theta)\right\rangle dt.$$
 \end{frame}
+
+% \begin{frame}{First-Order Optimality for Network Depth}
+%     By evaluating the variation of the Lagrangian strictly with respect to the scalar horizon multiplier $T$, we recover a rigorous first-order necessary condition:
+    
+%     \begin{theoremblock}{Optimality Condition for $T$}
+%     $$ \int_0^1 \left\langle p(t), \frac{d}{dt}x(t) \right\rangle \, dt = 0 $$
+%     \end{theoremblock}
+    
+%     The continuous adjoint state $p(t)$ solves an associated backward-time ODE, initialised via the terminal condition $p(1) = x(1) - u^\dagger$.
+% \end{frame}
 
 \begin{frame}{First-Order Optimality for Network Depth}
-    By evaluating the variation of the Lagrangian strictly with respect to the scalar horizon multiplier $T$, we recover a rigorous first-order necessary condition:
-    
-    \begin{theoremblock}{Optimality Condition for $T$}
-    $$ \int_0^1 \left\langle p(t), \frac{d}{dt}x(t) \right\rangle \, dt = 0 $$
+    \only<1>{We differentiate $\mathcal{L}$ with respect to the scalar horizon ${\color{uclred}T}$ to obtain
+    $$\partial_{\color{uclred}T}\mathcal{L}=-\int_0^1\left\langle p(t),\mathcal{F}(x(t),\Theta)\right\rangle dt.$$}
+    At an optimum, $\partial_{\color{uclred}T}\mathcal{L}=0$, we observe
+    $$\int_0^1\left\langle p(t),\mathcal{F}(x(t),\Theta)\right\rangle dt=0.$$ 
+    Using $\frac{d}{dt}x(t)={\color{uclred}T}\,\mathcal{F}(x(t),\Theta)$ (and ${\color{uclred}T}>0$), this is equivalent to
+    \begin{theoremblock}{Optimality Condition for ${\color{uclred}T}$}\vspace{-0.15cm}
+    $$ \int_0^1 \left\langle p(t), \frac{d}{dt}x(t) \right\rangle \, dt = 0. $$
     \end{theoremblock}
-    
-    The continuous adjoint state $p(t)$ solves an associated backward-time ODE, initialised via the terminal condition $p(1) = x(1) - u^\dagger$.
+    \vspace{-0.1cm}
+    \only<2->{The corresponding adjoint equation is
+    $$-\frac{d}{dt}p(t)= {\color{uclred}T}\left(\partial_x\mathcal{F}(x(t),\Theta)\right)^*p(t),\qquad p(1)=x(1)-u^\dagger.$$}
 \end{frame}
 
+% \begin{frame}{Interpreting the Condition: Structural Orthogonality}
+%     What does this equation actually mean physically?
+%     \vspace{1em}
+    
+%     It elegantly states that at the continuous global minimum of stopping time $T$, the integral product between the network's forward ODE velocity ($\frac{d}{dt}x$) and the adjoint error gradient field ($p$) must be perfectly \textbf{structurally orthogonal} \cite{effland2020variational}.
+% \end{frame}
+
 \begin{frame}{Interpreting the Condition: Structural Orthogonality}
-    What does this equation actually mean physically?
+    What does the optimality condition for ${\color{uclred}T}$ actually mean physically?
     \vspace{1em}
     
-    It elegantly states that at the continuous global minimum of stopping time $T$, the integral product between the network's forward ODE velocity ($\frac{d}{dt}x$) and the adjoint error gradient field ($p$) must be perfectly \textbf{structurally orthogonal} \cite{effland2020variational}.
+    \begin{columns}[T] % Align columns at the top
+        \begin{column}{0.55\textwidth}
+            It elegantly states that at the continuous global minimum of stopping time ${\color{uclred}T}$
+            \vspace{0.5em}
+            
+            \begin{itemize}
+                \item<2-> The network's forward ODE velocity ($\frac{d}{dt}x$)
+                \item<3-> And the adjoint error gradient field ($p$)
+            \end{itemize}
+            \vspace{0.5em}
+            
+            \uncover<4->{must be perfectly \textbf{structurally orthogonal} \cite{effland2020variational}.}
+        \end{column}
+        
+        \begin{column}{0.4\textwidth}
+            % This uses TikZ (already in your preamble) to draw a simple geometric representation
+            \uncover<4->{
+                \begin{figure}
+                    \centering
+                    \begin{tikzpicture}[scale=1.2]
+                        % Draw axes/vectors
+                        \draw[->, thick, uclblue] (0,0) -- (2,0) node[right] {$\frac{d}{dt}x$};
+                        \draw[->, thick, darkgreen] (0,0) -- (0,2) node[above] {$p(t)$};
+                        % Draw right angle square
+                        \draw (0.3,0) -- (0.3,0.3) -- (0,0.3);
+                        % Add dot product note
+                        \node at (1, 1) {$\left\langle p, \frac{d}{dt} x \right\rangle = 0$};
+                    \end{tikzpicture}
+                \end{figure}
+            }
+        \end{column}
+    \end{columns}
 \end{frame}
 
 \begin{frame}{Visualising the Optimality Condition}
