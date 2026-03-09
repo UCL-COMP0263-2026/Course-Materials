@@ -129,7 +129,7 @@ We introduce a continuous-time Lagrange multiplier $p(t) \in \mathcal{U}$, which
     \begin{split}
     \mathcal{L}(u, \Theta, p) &:= \mathcal{M}\left(u(T)\right) + \int_0^T \mathcal{R}\left(u(t), \Theta(t)\right) \, dt \\
     &\quad - \int_0^T \left\langle p(t), \frac{d}{dt}u(t) - \mathcal{F}\left(u(t), \Theta(t)\right) \right\rangle_{\mathcal{U}} \, dt \, .
-    \end{split}\eqref{eq:optcontrollag}
+    \end{split}\label{eq:optcontrollag}
 \end{align}
 To make it easier to take derivatives with respect to $u(t)$, we isolate $u(t)$ from its time derivative by applying integration by parts to the first half of the constraint integral, to obtain
 \begin{equation}

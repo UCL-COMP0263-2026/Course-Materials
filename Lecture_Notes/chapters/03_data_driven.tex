@@ -1,4 +1,4 @@
-\chapter{From hand-crafted to data-driven: learning regularisations}
+\chapter{From hand-crafted to data-driven: learning regularisations}\label{ch:data-driven}
 
 The variational regularisation methods discussed in the previous chapter, such as Tikhonov, LASSO, and Total Variation regularisation, represent a cornerstone of inverse problems theory. Their strength lies in a robust mathematical foundation and the ability to incorporate well-understood prior knowledge, like smoothness or sparsity. However, a significant limitation is that these priors are \emph{hand-crafted} and fixed. A regularisation functional like Total Variation, for instance, assumes a universal model of piecewise constant images, which may be too simplistic to capture the intricate textures and complex structures present in specific classes of images, such as medical scans or natural scenes.
 
@@ -226,7 +226,7 @@ Classical parameter choice rules, such as the discrepancy principle or the L-cur
 In recent years, the availability of training data has enabled a shift towards a supervised learning approach. Given a training dataset of $s$ pairs of ground-truth signals and their corresponding measurements, $\{(u_i^\dagger, f_i^\delta)\}_{i=1}^s$, we can learn the parameter $\alpha$ that yields reconstructions which are optimal with respect to a specific task, as measured by a loss function. This approach is explicitly \emph{task-centric}.
 
 \subsection{Bilevel optimisation}\label{sec:bilevel}
-The task-centric approach to learning optimal parameters can be naturally formulated as a \emph{bilevel optimisation} problem. This framework consists of two nested optimisation problems. The lower-level problem corresponds to the variational regularisation method as defined in \eqref{eq:var_reg} itself, defining the reconstruction operator for a given set of parameters. The upper-level problem minimises an expected loss (the task-specific quality metric) over the training data, thereby determining the optimal parameters.
+The task-centric approach to learning optimal parameters can be naturally formulated as a \emph{bilevel optimisation} problem. We obtain two nested optimisation problems. The lower-level problem is the variational reconstruction from \eqref{eq:var_reg} for fixed parameters, and the upper-level problem minimises a task loss over training data. This mirrors the empirical-risk viewpoint in \eqref{eq:dnn-empirical-risk-minimisation}, but now with a physics-constrained reconstruction map inside the objective.
 
 Let us generalise the variational formulation slightly. We consider a parameterised family of regularisation functionals $J_\theta$, where $\theta \in \Theta$ is a vector of parameters residing in an admissible set $\Theta$. This parameterisation can include the scalar weight $\alpha$, but also spatially varying weights, or parameters defining the structure of the regularisation function itself. The reconstruction operator $R_\theta$ is defined by the lower-level problem
 \begin{align}
@@ -260,7 +260,7 @@ Solving the bilevel optimisation problem \eqref{eq:bilevel_upper}-\eqref{eq:bile
 \begin{enumerate}
     \item \textbf{Non-convexity}: Even if the lower-level problem \eqref{eq:bilevel_lower} is convex in $u$ for a fixed $\theta$, the upper-level problem \eqref{eq:bilevel_upper} is generally non-convex with respect to $\theta$. This means that standard gradient-based optimisation methods may only find local minima. In fact, even for the simple case of learning the single scalar parameter $\alpha$ for Total Variation denoising (i.e. Example \ref{exm:rof_inv} for $K$ being the identity operator), the upper-level loss landscape is known to be non-convex (cf. Figure 4.1 in \cite{arridge2019solving}).
 
-    \item \textbf{Non-differentiability}: To solve the upper-level problem using gradient-based methods, we require the gradient of the objective function with respect to $\theta$. This involves differentiating the solution operator $R_\theta$. This can easily be seen if we reformulate \eqref{eq:bilevel_upper} with the help of the constraint $u_\alpha = R_\alpha(f^\delta)$. For simplicity of notation, we stick to a single sample, $\mathcal{L}_{\text{task}} = \frac12 \| \cdot \|^2$ and scalar parameter $\theta = \alpha$, i.e.
+    \item \textbf{Non-differentiability}: To solve the upper-level problem with gradient-based methods, we need derivatives with respect to $\theta$, which in turn requires differentiating the solution operator $R_\theta$. To see this explicitly, we consider a single sample, choose $\mathcal{L}_{\text{task}} = \frac12 \|\cdot\|^2$, and specialise to a scalar parameter $\theta = \alpha$, i.e.
     \begin{align*}
         \hat{\alpha} &= \argmin_{\alpha > 0} \frac12 \| u_\alpha - u^\dagger \|^2 \qquad \text{subject to} \qquad u_\alpha = R_\alpha(f^\delta) \, , 
     \intertext{which using the definition of the characteristic function (Definition \ref{def:charfunc}) can be rewritten as}
@@ -279,20 +279,26 @@ Solving the bilevel optimisation problem \eqref{eq:bilevel_upper}-\eqref{eq:bile
         0 = \left\langle \left( \left. \frac{d}{d\alpha} R_{\alpha}(f^\delta) \right|_{\alpha = \hat{\alpha}} \right), (R_{\hat\alpha}(f^\delta) - u^\dagger) \right\rangle \, .
     \end{align*}
     
-    To compute the required derivative $\frac{d}{d\alpha} R_{\alpha}(f^\delta)$, we often rely on the \href{https://en.wikipedia.org/wiki/Implicit_function_theorem}{\emph{Implicit Function Theorem (IFT)}}. Let $E_\alpha(u)$ denote the energy functional of the lower-level problem \eqref{eq:bilevel_lower}. If $E_\alpha(u)$ is sufficiently smooth with respect to both $u$ and $\alpha$, the solution $u_\alpha = R_\alpha(f^\delta)$ is characterised by the optimality condition
+    To compute the derivative $\frac{d}{d\alpha} R_{\alpha}(f^\delta)$, we often rely on the \href{https://en.wikipedia.org/wiki/Implicit_function_theorem}{\emph{Implicit Function Theorem (IFT)}}. From \eqref{eq:bilevel_lower}, for fixed data $f^\delta$ and parameter $\theta$, we define
     \begin{align*}
-        \nabla_u E_\alpha(u_\alpha) = 0 \, .
+        E_\theta(u; f^\delta) := F(Ku, f^\delta) + J_\theta(u) \, .
     \end{align*}
-    The IFT states that if the Hessian $\nabla_{uu}^2 E_\alpha(u_\alpha)$ is invertible (which typically requires the lower-level problem to be strictly convex), then the solution map $\alpha \mapsto u_\alpha$ is locally continuously differentiable. We can find its derivative by differentiating the optimality condition with respect to $\alpha$ using the chain rule:
+    In the scalar case $\theta=\alpha$, the solution $u_\alpha = R_\alpha(f^\delta)$ is characterised by
     \begin{align*}
-        \frac{d}{d\alpha} \left( \nabla_u E_\alpha(u_\alpha) \right) = \nabla_{uu}^2 E_\alpha(u_\alpha) \frac{du_\alpha}{d\alpha} + \nabla_{\alpha u}^2 E_\alpha(u_\alpha) = 0 \, .
+        \nabla_u E_\alpha(u_\alpha; f^\delta) = 0 \, .
+    \end{align*}
+    If the Hessian $\nabla_{uu}^2 E_\alpha(u_\alpha; f^\delta)$ is invertible (typically ensured by strict convexity of the lower-level problem), the IFT gives local differentiability of the map $\alpha \mapsto u_\alpha$. Differentiating the optimality condition yields
+    \begin{align*}
+        \frac{d}{d\alpha} \left( \nabla_u E_\alpha(u_\alpha; f^\delta) \right)
+        = \nabla_{uu}^2 E_\alpha(u_\alpha; f^\delta) \frac{du_\alpha}{d\alpha}
+        + \nabla_{\alpha u}^2 E_\alpha(u_\alpha; f^\delta) = 0 \, .
     \end{align*}
     Solving for the derivative (often called the sensitivity) yields
     \begin{align}
         \frac{du_\alpha}{d\alpha} = - \left( \nabla_{uu}^2 E_\alpha(u_\alpha) \right)^{-1} \nabla_{\alpha u}^2 E_\alpha(u_\alpha) \, . \label{eq:bilevel_sensitivity}
     \end{align}
 
-    \begin{exm}[Gradient computation for Tikhonov Regularisation]\label{eq:bilevel_tikhonov}\normalfont
+    \begin{exm}[Gradient computation for Tikhonov Regularisation]\label{exm:bilevel_tikhonov}\normalfont
     Let us consider Tikhonov regularisation (cf. \eqref{eq:tikh_variational}) where $F(K u, f^\delta) = \frac{1}{2}\|K u - f^\delta\|_{\mathcal{V}}^2$ and the regularisation function is $J_\alpha(u) = \frac{\alpha}{2}\|u\|_{\mathcal{U}}^2$. The energy is $E_\alpha(u) = \frac{1}{2}\|K u - f^\delta\|_{\mathcal{V}}^2 + \frac{\alpha}{2}\|u\|_{\mathcal{U}}^2$.
 
     We compute the necessary derivatives. The gradient with respect to $u$ is
@@ -318,7 +324,7 @@ Solving the bilevel optimisation problem \eqref{eq:bilevel_upper}-\eqref{eq:bile
     \end{align*}
     \end{exm}
     
-    Suppose the lower level problem \eqref{eq:bilevel_lower} is continuously differentiable with respect to $\theta$ (respectively $\alpha$) like in Example \ref{eq:bilevel_tikhonov}. Then we can aim to find $\hat\alpha$ that sets the gradient to zero by projected gradient descent, i.e.
+    Suppose the lower-level problem \eqref{eq:bilevel_lower} is continuously differentiable with respect to $\theta$ (respectively $\alpha$), as in Example \ref{exm:bilevel_tikhonov}. Then we can seek $\hat\alpha$ via projected gradient descent, i.e.
     \begin{align*}
         \alpha^{k + 1} = \max\left(0, \alpha^k - \tau \left\langle \left( \left. \frac{d}{d\alpha} R_{\alpha}(f^\delta) \right|_{\alpha = \alpha^k} \right), (R_{\alpha^k}(f^\delta) - u^\dagger) \right\rangle \right)
     \end{align*}
