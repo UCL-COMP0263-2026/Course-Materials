@@ -1,0 +1,337 @@
+% Ensure included PDFs (banners) with newer versions embed without warnings
+\pdfminorversion=7
+\documentclass[aspectratio=169]{beamer}
+
+\makeatletter
+% Make LaTeX find theme .sty files in Template
+\def\input@path{{../Template/}}
+\makeatother
+\usepackage{graphicx}
+% Make graphics (including banner PDFs) resolvable without TEXINPUTS
+\graphicspath{{../Template/}{../Template/banners/}{../../Common_Images/}}
+
+%================================================================%
+% Theme and Package Setup
+%================================================================%
+\usetheme{ucl}
+\setbeamercolor{banner}{bg=darkpurple}
+
+% Navigation and Footer
+\setbeamertemplate{navigation symbols}{\vspace{-2ex}}
+\setbeamertemplate{footline}[author title date]
+\setbeamertemplate{slide counter}[framenumber/totalframenumber]
+
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel} % British spelling
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{calc, positioning, arrows.meta, shapes.geometric, trees, backgrounds, shapes.misc, graphs, quotes, shadows, fit, patterns} 
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usefonttheme{professionalfonts}
+\usepackage{eulervm}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{subcaption}
+
+% Define custom colours
+\makeatletter
+\@ifundefined{color@stone}{%
+    \definecolor{stone}{gray}{0.95}%
+}{}
+\makeatother
+\definecolor{darkgreen}{rgb}{0.0, 0.5, 0.0}
+\definecolor{uclblue}{cmyk}{1,0.24,0,0.64}
+\definecolor{uclred}{cmyk}{0,1,0.62,0}
+\definecolor{uclpurple}{cmyk}{0.32,0.42,0,0.55}
+\definecolor{uclorange}{cmyk}{0,0.45,0.91,0}
+
+\setbeamercovered{transparent}
+
+% Define theoremblock
+\makeatletter
+\newenvironment<>{theoremblock}[1]{%
+    \begin{block}#2{#1}%
+}{\end{block}}
+\makeatother
+
+% Section divider slides
+\AtBeginSection[]{
+  \begin{frame}
+    \frametitle{\textbf{\Large\insertsectionhead}}
+    \begin{center}
+        \huge\textbf{\insertsectionhead}
+    \end{center}
+  \end{frame}
+}
+
+% Maths Macros
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\V}{\mathcal{V}}
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\ip}[2]{\langle #1, #2 \rangle}
+\newcommand{\norm}[1]{\| #1 \|}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\supremum}{sup}
+\DeclareMathOperator{\sign}{sign}
+
+\title{Deep Equilibrium Methods (DEQs)}
+\subtitle{Part 2: Implicit Differentiation and Deep Sequence Modelling}
+\author[Martin Benning (University College London)]{Martin Benning}
+\date[COMP0263]{COMP0263 -- Solving Inverse Problems with Data-Driven Models \\[1cm] 10th March 2026}
+\institute[]{University College London}
+
+\begin{document}
+
+% --- Title Frame ---
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% --- Outline ---
+\begin{frame}{Lecture Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Accelerated Forward Passes}
+
+\begin{frame}{Recap of Lecture 1}
+    In our previous lecture, we transitioned from explicit deep networks to \textbf{Deep Equilibrium Models (DEQs)}.
+    
+    \vspace{1em}
+    \begin{itemize}
+        \item We replaced finite layer stacking with a single equilibrium condition, which yields
+        $$ {\color{darkgreen}z^\star} = f_{\color{uclblue}\theta}({\color{darkgreen}z^\star}, {\color{uclpurple}x}) . $$
+        \item We reframed the forward pass as a root-finding problem $g_{\color{uclblue}\theta}({\color{darkgreen}z}, {\color{uclpurple}x}) = 0$.
+        \item We utilised Broyden's method to bypass explicit dense Jacobian inversions using memory-efficient rank-one updates.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Anderson Acceleration (AA) Introduction}
+    While Broyden's method originates from quasi-Newton updates, we can approach acceleration differently.
+    
+    \vspace{1em}
+    \textbf{Anderson Acceleration (AA)} starts fundamentally from the fixed-point iteration itself.
+    \vspace{1em}
+    
+    Instead of approximating the inverse Jacobian, AA forms an \textbf{affine combination} of recent iterates. The goal is to strictly minimise the current residual in a small least-squares problem \cite{walker2011anderson}.
+\end{frame}
+
+\begin{frame}{Formulating Anderson Acceleration}
+    We store the residuals ${\color{uclred}g_i} = g_{\color{uclblue}\theta}({\color{darkgreen}z_i};{\color{uclpurple}x})$ and collect the recent step differences into matrices
+    $$ S_k := [\Delta {\color{darkgreen}z}_{k-m+1},\ldots,\Delta {\color{darkgreen}z}_k], \qquad Y_k := [\Delta {\color{uclred}g}_{k-m+1},\ldots,\Delta {\color{uclred}g}_k] . $$
+    
+    \pause
+    We then define a mixing parameter vector ${\color{uclorange}\gamma_k}$ that solves the minimum norm least-squares problem, which gives
+    $$ {\color{uclorange}\gamma_k} \in \argmin_{\gamma} \left\{ \| \gamma \|_2  \left| \gamma = \argmin_{\gamma} \|{\color{uclred}g_k}-Y_k\gamma\|_2 \right. \right\} \implies {\color{uclorange}\gamma_k} = Y_k^\dagger {\color{uclred}g_k} . $$
+    
+    \pause
+    The final AA update step then reads
+    \begin{theoremblock}{Anderson Acceleration Update}
+    $$ {\color{darkgreen}z}_{k+1}^{\mathrm{AA}} = {\color{darkgreen}z}_k + {\color{uclred}g_k} - (S_k+Y_k){\color{uclorange}\gamma_k} . $$
+    \end{theoremblock}
+\end{frame}
+
+\begin{frame}{Link Between AA, Broyden, and GMRES}
+    How do these acceleration methods relate mathematically?
+    
+    \vspace{1em}
+    \begin{itemize}
+        \item AA exposes an algebraic link to multisecant quasi-Newton updates.
+        \item In the full-memory setting, AA has the exact same form as the corresponding \textbf{multisecant inverse-Broyden} step.
+        \item \textbf{Crucial Connection:} When Anderson Acceleration is applied to a strictly linear system, it becomes mathematically equivalent to \textbf{GMRES} (Generalised Minimal Residual method).
+    \end{itemize}
+\end{frame}
+
+\section{The Backward Pass: Implicit Differentiation}
+
+\begin{frame}{The Backward Pass Challenge}
+    We can now find the equilibrium state ${\color{darkgreen}z^\star}$ efficiently in the forward pass. But how do we compute gradients to update ${\color{uclblue}\theta}$?
+    
+    \vspace{1em}
+    \begin{alertblock}{The Problem with Backpropagation Through Time (BPTT)}
+        Backpropagating through the exact sequence of forward root-finder iterations is extremely slow, numerically unstable, and destroys our $\mathcal{O}(1)$ memory advantage.
+    \end{alertblock}
+    
+    \vspace{1em}
+    \textbf{The Solution:} We obtain gradients analytically by taking the transpose of \textbf{implicit differentiation}.
+\end{frame}
+
+\begin{frame}
+
+\end{frame}
+
+\begin{frame}{Implicit Differentiation via the Lagrangian}
+    We elegantly derive this by formulating the backward pass as a constrained optimisation problem.
+    
+    \vspace{1em}
+    We define our empirical risk objective $\mathcal{L}_{\text{task}}({\color{darkgreen}z}, {\color{uclblue}\theta})$ subject to the equilibrium constraint. Introducing the dual variable (adjoint state) ${\color{uclred}v}$, we formulate the Lagrangian, which yields
+    
+    $$ \mathcal{L}({\color{darkgreen}z}, {\color{uclblue}\theta}; {\color{uclred}v}) = \mathcal{L}_{\text{task}}({\color{darkgreen}z}, {\color{uclblue}\theta}) - \langle {\color{uclred}v}, {\color{darkgreen}z} - f_{\color{uclblue}\theta}({\color{darkgreen}z}; {\color{uclpurple}x}) \rangle $$
+\end{frame}
+
+\begin{frame}{Applying the KKT Conditions}
+    According to the Karush-Kuhn-Tucker (KKT) conditions, at the optimal equilibrium state ${\color{darkgreen}z^\star}$, the gradient with respect to ${\color{darkgreen}z}$ must vanish.
+    
+    \vspace{1em}
+    Evaluating the stationary point of the Lagrangian gives
+    
+    $$ \nabla_{\color{darkgreen}z} \mathcal{L}({\color{darkgreen}z^\star}, {\color{uclblue}\theta}; {\color{uclred}v}) = \nabla_{\color{darkgreen}z} \mathcal{L}_{\text{task}}({\color{darkgreen}z^\star}, {\color{uclblue}\theta}) - {\color{uclred}v} + (\partial_{\color{darkgreen}z} f_{\color{uclblue}\theta}({\color{darkgreen}z^\star}; {\color{uclpurple}x}))^{\top} {\color{uclred}v} = 0 $$
+\end{frame}
+
+\begin{frame}{Deriving the Adjoint Equation}
+    We denote the forward Jacobian transpose evaluated at equilibrium as $J_{f_{\color{uclblue}\theta}}^{\top} = (\partial_{\color{darkgreen}z} f_{\color{uclblue}\theta}({\color{darkgreen}z^\star}; {\color{uclpurple}x}))^{\top}$.
+    
+    \vspace{1em}
+    Rearranging our KKT optimality condition produces a direct fixed-point equation for the adjoint variable ${\color{uclred}v}$, which yields
+    
+    \begin{theoremblock}{The Adjoint Fixed-Point Equation}
+    $$ (I - J_{f_{\color{uclblue}\theta}}^{\top}) {\color{uclred}v} = \nabla_{\color{darkgreen}z} \mathcal{L}_{\text{task}}({\color{darkgreen}z^\star}, {\color{uclblue}\theta}) $$
+    $$ \Longleftrightarrow \quad {\color{uclred}v} = J_{f_{\color{uclblue}\theta}}^{\top} {\color{uclred}v} + \nabla_{\color{darkgreen}z} \mathcal{L}_{\text{task}}({\color{darkgreen}z^\star}, {\color{uclblue}\theta}) $$
+    \end{theoremblock}
+\end{frame}
+
+\begin{frame}{Computing the Total Derivative}
+    Once our iterative solver finds the converged adjoint state ${\color{uclred}v^\star}$, we compute the total derivative of the loss with respect to the network parameters ${\color{uclblue}\theta}$. 
+    
+    \vspace{1em}
+    Differentiating the Lagrangian directly with respect to ${\color{uclblue}\theta}$ provides
+    
+    $$ \frac{\partial \mathcal{L}_{\text{task}}}{\partial {\color{uclblue}\theta}} = \nabla_{\color{uclblue}\theta} \mathcal{L}_{\text{task}}({\color{darkgreen}z^\star}, {\color{uclblue}\theta}) + \left\langle {\color{uclred}v^\star}, \partial_{\color{uclblue}\theta} f_{\color{uclblue}\theta}({\color{darkgreen}z^\star}; {\color{uclpurple}x}) \right\rangle $$
+    
+    \pause
+    Since $\mathcal{L}_{\text{task}}$ evaluates purely on the final state and has no explicitly separate parameterisation in ${\color{uclblue}\theta}$, we find $\nabla_{\color{uclblue}\theta} \mathcal{L}_{\text{task}} = 0$, which simplifies the gradient strictly to
+    $$ \left\langle {\color{uclred}v^\star}, \partial_{\color{uclblue}\theta} f_{\color{uclblue}\theta}({\color{darkgreen}z^\star}; {\color{uclpurple}x}) \right\rangle $$
+\end{frame}
+
+\begin{frame}{The $\mathcal{O}(1)$ Memory Guarantee}
+    \begin{columns}
+        \begin{column}{0.6\textwidth}
+            Notice that computing the backward pass strictly requires:
+            \begin{enumerate}
+                \item The final equilibrium state ${\color{darkgreen}z^\star}$ (already computed).
+                \item A vector-Jacobian product inside the linear solver for ${\color{uclred}v}$.
+            \end{enumerate}
+            
+            \vspace{1em}
+            We \textbf{completely avoid} retaining intermediate forward trajectory states ${\color{darkgreen}z_k}$. The training memory footprint remains $\mathcal{O}(1)$ \cite{bai2019deep, gilton2021deep}!
+        \end{column}
+        
+        \begin{column}{0.4\textwidth}
+            \begin{figure}
+                \centering
+                \begin{tikzpicture}
+                    \node[draw, fill=darkgreen!20, minimum width=2.5cm, minimum height=1cm, align=center, rounded corners] (z) at (0,0) {Retain only \\ ${\color{darkgreen}z^\star}$};
+                    \node[draw, fill=uclred!20, minimum width=2.5cm, minimum height=1cm, align=center, rounded corners] (v) at (0,-1.5) {Solve for \\ ${\color{uclred}v}$};
+                    \draw[->, thick, uclblue] (z) -- (v) node[midway, right] {VJP};
+                \end{tikzpicture}
+            \end{figure}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\section{Convergence Guarantees}
+
+\begin{frame}{Spectral Symmetry: Forward vs. Backward}
+    A remarkable mathematical synergy arises regarding convergence.
+    
+    \vspace{1em}
+    The linear operator driving the adjoint iteration is explicitly $J_{f_{\color{uclblue}\theta}}^{\top}$. 
+    Because a matrix and its transpose share identical eigenvalues, their spectral radii remain perfectly identical, which yields
+    
+    $$ \rho(J_{f_{\color{uclblue}\theta}}^{\top}) = \rho(J_{f_{\color{uclblue}\theta}}) $$
+    
+    \vspace{1em}
+    \begin{block}{Theoretical Guarantee}
+    If the forward pass converges as a strict contraction mapping, the backward adjoint pass is automatically guaranteed to be a contraction with the \textbf{exact same theoretical rate}.
+    \end{block}
+\end{frame}
+
+\begin{frame}{Relaxing Strict Contraction for Solvers}
+    When we employ robust quasi-Newton solvers (Broyden or Anderson Acceleration), the strict requirement of $\rho < 1$ drops.
+    
+    \vspace{1em}
+    \begin{itemize}
+        \item For root-finding success, the true Jacobian of the residual $I - J_{f_{\color{uclblue}\theta}}$ merely needs to be \textbf{non-singular}.
+        \item This indicates $1$ is an excluded eigenvalue of $J_{f_{\color{uclblue}\theta}}$.
+        \item By transpose property, $I - J_{f_{\color{uclblue}\theta}}^{\top}$ inherently avoids singularity as well!
+    \end{itemize}
+    \vspace{1em}
+    Because the adjoint equation is strictly linear with respect to ${\color{uclred}v}$, running AA essentially executes a robust GMRES algorithm guaranteed to approach the exact adjoint variable.
+\end{frame}
+
+\section{Application: Deep Sequence Modelling}
+
+\begin{frame}{Deep Sequence Modelling}
+    Explicit depth in Recurrent Neural Networks (RNNs) or Transformers acts as a proxy for the \emph{iterative refinement} of temporal representations.
+    
+    \vspace{1em}
+    The DEQ perspective takes this iterative refinement to its mathematical limit. The sequence representation is evaluated directly as the equilibrium condition, yielding
+    $$ {\color{darkgreen}z^\star} = f_{\color{uclblue}\theta}({\color{darkgreen}z^\star}, {\color{uclpurple}x}) $$
+    
+    \vspace{1em}
+    We can choose \textbf{any} stable sequence cell $f_{\color{uclblue}\theta}$ and utilise root-finding to bypass layer stacking entirely.
+\end{frame}
+
+\begin{frame}{Two Core DEQ Sequence Instantiations}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{theoremblock}{DEQ-TrellisNet}
+                Uses weight-tied temporal convolutions. It preserves causal sequence processing while entirely replacing explicit unrolling with an equilibrium computation \cite{bai2019deep}.
+            \end{theoremblock}
+        \end{column}
+        
+        \begin{column}{0.48\textwidth}
+            \begin{theoremblock}{DEQ-Transformer}
+                Uses weight-tied multi-head self-attention (alongside normalisation and positional encoding) firmly inside the same implicit equilibrium framework.
+            \end{theoremblock}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\begin{frame}
+
+\end{frame}
+
+\begin{frame}{The Critical Role of Input Injection}
+    Because the equilibrium is independent of any particular initial starting iterate, the map \textbf{must include the input} at each update!
+    
+    \vspace{1em}
+    Without injecting ${\color{uclpurple}x}$ into the function cell continuously, the hidden state ${\color{darkgreen}z^\star}$ would collapse to an input-agnostic fixed point. Input injection ensures the final representation remains a strict function of the sequence data \cite{kolter2020deepimplicit}.
+\end{frame}
+
+\begin{frame}{Empirical Performance \& Memory Efficiency}
+    DEQ sequence models demonstrate highly competitive empirical performance against strong explicit-depth baselines.
+    
+    \vspace{1em}
+    \begin{itemize}
+        \item \textbf{Accuracy:} DEQ-Transformer matches or improves upon deep Transformer-XL on benchmarks like WikiText-103.
+        \item \textbf{Memory Savings:} Because gradients are computed analytically, DEQs achieve over \textbf{80\% memory savings} compared to explicit architectures!
+        \item \textbf{Deployment Shift:} Capacities that previously required aggressive multi-GPU memory engineering easily fit on a single accelerator.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Summary of Lecture 2}
+    \begin{itemize}
+        \item \textbf{Anderson Acceleration:} Provides multisecant fixed-point updates mathematically linked to GMRES.
+        \item \textbf{Implicit Differentiation:} We compute the backward pass analytically via KKT conditions on the Lagrangian.
+        \item \textbf{Convergence:} The system guarantees an $\mathcal{O}(1)$ training memory footprint and symmetric spectral convergence behaviour.
+        \item \textbf{Sequence Models:} DEQ-Transformers unlock massive memory savings for long-range causal sequence modelling.
+    \end{itemize}
+    \vspace{1em}
+    \textbf{Next Lecture:} We apply DEQs to inverse problems in imaging (DEMs) and discover their theoretical links to Bilevel Optimisation!
+\end{frame}
+
+\begin{frame}[allowframebreaks]{References}
+    \bibliographystyle{abbrv}
+    \bibliography{../../Lecture_Notes/references}
+\end{frame}
+
+\end{document}
