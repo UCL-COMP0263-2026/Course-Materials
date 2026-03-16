@@ -33,3 +33,159 @@ For the head ($j \leq N$), we have a finite sum. Since $\Delta_j(\delta) \to 0$ 
 \end{align*}
 The second term is bounded by $\Delta_j(\delta) \leq \delta^2$. By choosing $\delta$ sufficiently small, the finite sum can be made less than $\epsilon/2$. Thus, $e(u, \delta) < \epsilon$ for small enough $\delta$. The proof for the average expected error follows similarly.
 \end{proof}
+
+\section{Convergence Analysis for Lifted Bregman Perceptron Inversion}\label{app:perceptron_inversion_convergence}
+
+This appendix provides a detailed convergence analysis for the lifted Bregman inversion framework applied to single-layer perceptrons, establishing the regularisation properties and error estimates referenced in Chapter~\ref{ch:lifted}.
+
+\subsection{Well-definedness}
+
+For the regularised inversion problem
+\begin{align}
+    u_\alpha^\delta \in \argmin_{\tilde{u}} \left\{ B_\Psi\!\left(f^\delta, W\tilde{u}+b\right) + \alpha J(\tilde{u}) \right\} \, ,\label{eq:perceptron_variational_regularisation_app}
+\end{align}
+we first establish that the regularisation operator is well-defined under suitable assumptions on $J$ and $\Psi$.
+
+Following the inverse problems literature (cf.~\cite{benning2018modern}), assume that $J$ is non-negative and the polar of a proper function, i.e. $J = H^\ast$ for a proper function $H:\mathbb{R}^n \rightarrow \mathbb{R} \cup \{ \infty \}$. This automatically implies convexity of $J$. Moreover, assume that $\Psi$ is a proper, non-negative and convex function that is continuous on $\text{dom}(\Psi) := \{ y \in \mathbb{R}^m \,|\, \Psi(y) < \infty \}$. Then $B_\Psi$ is proper, non-negative, convex in its second argument and continuous in its first argument for every $f^\delta \in \text{dom}(\Psi)$. 
+
+Additionally, assume that $J$ and $\Psi$ are chosen such that for each $f^\delta \in \text{dom}(\Psi)$ and $\alpha > 0$,
+\begin{align*}
+    \| \tilde{u} \| \leq c(a, b, \| f^\delta \|), \qquad \text{if} \quad B_\Psi(f^\delta, W\tilde{u} + b) \leq a \quad \text{and} \quad \alpha J(\tilde{u}) \leq d \, ,
+\end{align*}
+for constants $a, d$ and a constant $c$ that depends monotonically non-decreasing on all arguments. Under these conditions, for every $f^\delta \in \text{dom}(\Psi)$ there exists a minimiser $u_\alpha^\delta \in \eqref{eq:perceptron_variational_regularisation_app}$, and the solution set is non-empty and convex. Furthermore, for every sequence $\{f_n^\delta\} \to f^\delta \in \text{dom}(\Psi)$ there exists a convergent subsequence of solutions.
+
+\subsection{Error Estimates and the Burbea--Rao Divergence}
+
+Having established well-definedness, we now prove that the lifted Bregman regularisation is a convergent regularisation, i.e., that the error vanishes as noise level $\delta \to 0$. The analysis relies on two key notions: the symmetric Bregman distance with respect to $J$, and the Burbea--Rao divergence.
+
+The symmetric Bregman distance (or Jeffreys distance) between $\tilde{u}$ and $u^\dagger$ is defined as
+\begin{align*}
+    D_J^{\mathrm{sym}}(\tilde{u}, u^\dagger) := D_J(\tilde{u}, u^\dagger) + D_J(u^\dagger, \tilde{u}) \, ,
+\end{align*}
+where $D_J(\tilde{u}, u^\dagger) := J(\tilde{u}) - J(u^\dagger) - \langle q^\dagger, \tilde{u} - u^\dagger \rangle$ for $q^\dagger \in \partial J(u^\dagger)$. This distance measures both the data fidelity and reconstruction error in a symmetric manner.
+
+For the Burbea--Rao divergence, define $\Phi := \frac{1}{2}\|\cdot\|_2^2 + \Psi$. The Burbea--Rao divergence is
+\begin{align}\label{eq:jensen_shannon_app}
+    \mathcal{J}_{\Phi}(a, b) := \frac{1}{2} \left( \Phi(a) + \Phi(b) - 2 \Phi\left( \frac{a + b}{2} \right) \right) \, .
+\end{align}
+This generalises the classical Jensen--Shannon divergence to arbitrary convex functions and measures the curvature of $\Phi$ at the midpoint.
+
+A crucial property needed in the proof is the Fenchel conjugate of $B_\Psi$ with respect to its second argument:
+\begin{align*}
+    \left(B_\Psi(f^\delta, \cdot)\right)^*(w) = \Phi(f^\delta + w) - \Phi(f^\delta) \, .
+\end{align*}
+This identity enables estimating products of $B_\Psi$ terms with auxiliary variables via convex function values.
+
+\subsection{Main Convergence Theorem}
+
+\begin{thm}[Perceptron Error Estimate in Symmetric Bregman Distance]\label{thm:perceptron_error_estimate_app}
+Suppose $J$ and $\Psi$ satisfy the assumptions outlined above. Then for noisy data $f^\delta$ that satisfies 
+\begin{align*}
+    B_\Psi(f^\delta, Wu^\dagger+b) \leq \delta^2
+\end{align*}
+with $\delta \geq 0$, where $u^\dagger$ is the true solution satisfying $\sigma(Wu^\dagger+b) = y$ (the exact data before noise), a solution $u_\alpha^\delta \in \eqref{eq:perceptron_variational_regularisation_app}$, and the source condition
+\begin{align}\label{eq:source_condition_app}
+    W^\top v^\dagger \in \partial J(u^\dagger)
+\end{align}
+for some $v^\dagger$, we have the error estimate
+\begin{align}
+    \begin{split}
+    &(1-c)\,B_\Psi\!\left(f^\delta, Wu_\alpha^\delta+b\right) + \alpha\,D_J^{\mathrm{sym}}(u_\alpha^\delta,u^\dagger) \\
+    &\qquad\le (1+c)\,\delta^2 + \frac{\alpha^2}{c}\|v^\dagger\|_2^2 + 2c\,\mathcal{J}_{\Phi}\!\left(f^\delta+\frac{\alpha}{c}v^\dagger,\,f^\delta-\frac{\alpha}{c}v^\dagger\right) \, ,
+    \end{split}
+    \label{eq:perceptron_error_estimate_app}
+\end{align}
+for any $c\in(0,1]$.
+\end{thm}
+
+\begin{proof}
+Every solution $u_\alpha^\delta$ of \eqref{eq:perceptron_variational_regularisation_app} satisfies the optimality condition
+\begin{align*}
+    W^\top\big(\sigma(Wu_\alpha^\delta+b)-f^\delta\big)+\alpha p_\alpha=0, \qquad p_\alpha\in\partial J(u_\alpha^\delta).
+\end{align*}
+Subtracting $p^\dagger \in \partial J(u^\dagger)$ from both sides and taking the duality product with $u_\alpha^\delta - u^\dagger$ yields
+\begin{align}
+    \langle \sigma(Wu_\alpha^\delta+b)-f^\delta,\,W(u_\alpha^\delta-u^\dagger)\rangle + \alpha D_J^{\mathrm{sym}}(u_\alpha^\delta,u^\dagger) = -\alpha\langle v^\dagger, W(u_\alpha^\delta-u^\dagger)\rangle \, .\label{eq:optimality_duality_app}
+\end{align}
+
+Next, observe that by convexity of $z\mapsto B_\Psi(f^\delta,z)$ and the Bregman three-point identity,
+\begin{align*}
+    B_\Psi(f^\delta,Wu_\alpha^\delta+b) - B_\Psi(f^\delta,Wu^\dagger+b) &\ge \langle \sigma(Wu^\dagger+b)-f^\delta,\,W(u_\alpha^\delta-u^\dagger)\rangle \, .
+\end{align*}
+Thus, the inner product in \eqref{eq:optimality_duality_app} can be replaced:
+\begin{align*}
+    B_\Psi(f^\delta,Wu_\alpha^\delta+b) - B_\Psi(f^\delta,Wu^\dagger+b) + \alpha D_J^{\mathrm{sym}}(u_\alpha^\delta,u^\dagger) \le -\alpha\langle v^\dagger, W(u_\alpha^\delta-u^\dagger)\rangle \, .
+\end{align*}
+Rearranging,
+\begin{align*}
+    B_\Psi(f^\delta,Wu_\alpha^\delta+b) + \alpha D_J^{\mathrm{sym}}(u_\alpha^\delta,u^\dagger) \le B_\Psi(f^\delta,Wu^\dagger+b) - \alpha\langle v^\dagger, W(u_\alpha^\delta-u^\dagger)\rangle \, .
+\end{align*}
+
+Now introduce $c\in(0,1]$ and split the $B_\Psi$ term on the right-hand side as
+\begin{align*}
+    B_\Psi(f^\delta,Wu^\dagger+b) = (1+c)B_\Psi(f^\delta,Wu^\dagger+b) - cB_\Psi(f^\delta,Wu^\dagger+b) \, .
+\end{align*}
+On the left-hand side, extract $(1-c)B_\Psi(f^\delta,Wu_\alpha^\delta+b) + cB_\Psi(f^\delta,Wu_\alpha^\delta+b)$.  The estimate becomes
+\begin{align*}
+    &(1-c)B_\Psi(f^\delta,Wu_\alpha^\delta+b) + \alpha D_J^{\mathrm{sym}}(u_\alpha^\delta,u^\dagger) + cB_\Psi(f^\delta,Wu_\alpha^\delta+b) \\ 
+    {} \le {} &(1+c)B_\Psi(f^\delta,Wu^\dagger+b) - \alpha\langle v^\dagger, W(u_\alpha^\delta-u^\dagger)\rangle - cB_\Psi(f^\delta,Wu^\dagger+b) \, .
+\end{align*}
+Rearranging the linear terms yields
+\begin{align*}
+    (1-c)B_\Psi(f^\delta,Wu_\alpha^\delta+b) + \alpha D_J^{\mathrm{sym}}(u_\alpha^\delta,u^\dagger) {} \le {} &(1+c)B_\Psi(f^\delta,Wu^\dagger+b) \\
+    &+ \langle \alpha v^\dagger, Wu_\alpha^\delta+b \rangle - c B_\Psi(f^\delta,Wu_\alpha^\delta+b) \\
+    &- \langle \alpha v^\dagger, Wu^\dagger+b \rangle - c B_\Psi(f^\delta,Wu^\dagger+b) \, .
+\end{align*}
+
+\noindent Now apply the Fenchel conjugate property. For the term involving $+\alpha v^\dagger$ we obtain
+\begin{align*}
+    \langle \alpha v^\dagger, Wu_\alpha^\delta+b \rangle - c B_\Psi(f^\delta,Wu_\alpha^\delta+b) &\le c \left( \Phi(f^\delta + \tfrac{\alpha}{c}v^\dagger) - \Phi(f^\delta) \right) \, .
+\end{align*}
+For the term involving $-\alpha v^\dagger$ we observe
+\begin{align*}
+    - \langle \alpha v^\dagger, Wu^\dagger+b \rangle - c B_\Psi(f^\delta,Wu^\dagger+b) &\le c \left( \Phi(f^\delta - \tfrac{\alpha}{c}v^\dagger) - \Phi(f^\delta) \right) \, .
+\end{align*}
+Adding these two bounds yields
+\begin{align*}
+    &\langle \alpha v^\dagger, Wu_\alpha^\delta+b \rangle - c B_\Psi(f^\delta,Wu_\alpha^\delta+b) - \langle \alpha v^\dagger, Wu^\dagger+b \rangle - c B_\Psi(f^\delta,Wu^\dagger+b) \\
+    &\quad \le c \left( \Phi(f^\delta + \tfrac{\alpha}{c}v^\dagger) + \Phi(f^\delta - \tfrac{\alpha}{c}v^\dagger) - 2\Phi(f^\delta) \right) + \frac{\alpha^2}{c}\|v^\dagger\|_2^2 \\
+    &\quad = 2c \,\mathcal{J}_{\Phi}\!\left(f^\delta+\frac{\alpha}{c}v^\dagger,\,f^\delta-\frac{\alpha}{c}v^\dagger\right) + \frac{\alpha^2}{c}\|v^\dagger\|_2^2 \, .
+\end{align*}
+Finally, using $B_\Psi(f^\delta,Wu^\dagger+b) \leq \delta^2$ yields the claimed estimate \eqref{eq:perceptron_error_estimate_app}.
+\end{proof}
+
+\begin{rem}[Convergence condition]
+For continuous $\Psi$ and $c > 0$, the Burbea--Rao term satisfies
+\begin{align*}
+    \lim_{\alpha \rightarrow 0} \mathcal{J}_{\Phi}\!\left(f^\delta+\frac{\alpha}{c}v^\dagger,\,f^\delta-\frac{\alpha}{c}v^\dagger\right) = 0 \, .
+\end{align*}
+To guarantee convergence of the symmetric Bregman distance as $\delta \to 0$, it is sufficient to verify that this term vanishes faster than $\alpha$, which holds for many practically relevant choices of $\Psi$ (e.g., indicator functions for ReLU).
+\end{rem}
+
+\begin{exm}[ReLU Perceptron]\normalfont
+Consider $\Psi(z) = \chi_{[0,\infty)^m}(z)$, so $\sigma(z) = \max(z,0)$. The domain constraint requires $f^\delta_i \geq 0$ for all $i$. For the Burbea--Rao term to vanish, we need
+\begin{align*}
+    -\frac{c}{\alpha} f^\delta_i \leq v^\dagger_i \leq \frac{c}{\alpha} f^\delta_i, \quad \forall i,
+\end{align*}
+which is guaranteed by $\|v^\dagger\|_\infty \le (c \|f^\delta\|_\infty / \alpha)$. Under this condition, $\mathcal{J}_{\Phi} = 0$, and \eqref{eq:perceptron_error_estimate_app} simplifies to
+\begin{align*}
+    \frac{1-c}{\alpha}B_\Psi(f^\delta, Wu_\alpha^\delta+b) + D_J^{\mathrm{sym}}(u_\alpha^\delta,u^\dagger) \le \frac{1+c}{\alpha}\delta^2 + \frac{\alpha}{c}\|v^\dagger\|_2^2 \, .
+\end{align*}
+Choosing $\alpha(\delta) = \sqrt{c(1+c)}\,\delta/\|v^\dagger\|_2$, we obtain
+\begin{align*}
+    D_J^{\mathrm{sym}}\!\left(u_{\alpha(\delta)}^\delta,u^\dagger\right) \le 2\sqrt{\frac{1+c}{c}}\,\|v^\dagger\|_2\,\delta \, ,
+\end{align*}
+demonstrating linear convergence in the noise level.
+\end{exm}
+
+\subsection{Extension to Multi-layer Inversion}
+
+The error estimate \eqref{eq:perceptron_error_estimate_app} extends to sequential, layer-wise inversions. In the multi-layer setting, one inverts layer-by-layer from the output backwards, where at each stage the previous layer's output serves as the data for the next variational regularisation problem. While this sequential approach preserves the individual layer convergence guarantees, the simultaneous inversion of all layers (as in Problem~\eqref{eq:lifted_inversion} of Chapter~\ref{ch:lifted}) requires additional analysis since the overall objective is no longer guaranteed to be convex in all variables simultaneously.
+
+\section{Proof of the Perceptron Error Estimate}\label{app:proof_perceptron_error_estimate_ch9}
+
+This section provides the proof of Theorem~\ref{thm:perceptron_error_estimate_ch9}, which is a specialisation of the general result in Section~\ref{app:perceptron_inversion_convergence} to the notation and setting of Chapter~\ref{ch:lifted}.
+
+\begin{proof}[Proof of Theorem~\ref{thm:perceptron_error_estimate_ch9}]
+The proof follows directly from Theorem~\ref{thm:perceptron_error_estimate_app} with the identifications $u_\alpha^\delta \to u_\alpha^\delta$, $J \to J$, $f^\delta \to f^\delta$, and $\Phi \to \Phi = \frac{1}{2}\|\cdot\|_2^2 + \Psi$. The left-hand side of \eqref{eq:perceptron_error_estimate_app} controls both data fidelity via the Bregman loss and reconstruction quality via the symmetric Bregman distance of $J$. The right-hand side bounds this by the noise level, the source condition strength $\|v^\dagger\|_2^2$, and the Burbea--Rao divergence, which measures how far the perturbed outputs deviate from the true output in a convexity-based sense. As $\delta \to 0$ (and correspondingly $\alpha(\delta) \to 0$ at an appropriate rate), the estimate ensures that the reconstruction error vanishes.
+\end{proof}
