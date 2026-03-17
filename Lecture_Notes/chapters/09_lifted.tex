@@ -231,7 +231,7 @@ For the model in \eqref{eq:shallownn}, i.e.,
 \begin{equation*}
     N(x)=\sum_{j=1}^{J} c_j\,\sigma_j(w_j^\top x+b_j) \, ,
 \end{equation*}
-we define $u=(x,h_1,\ldots,h_J)^\top\in\mathbb{R}^{M+J}$ and $z=(h_1,\ldots,h_J)^\top\in\mathbb{R}^{J}$. Then one convenient choice to frame \eqref{eq:shallownn} as \eqref{eq:unified_architecture} is with
+we introduce auxiliary variables $\zeta_1,\ldots,\zeta_J$ and define $u=(x,\zeta_1,\ldots,\zeta_J)^\top\in\mathbb{R}^{M+J}$ and $z=(z_1,\ldots,z_J)^\top\in\mathbb{R}^{J}$. Then one convenient choice to frame \eqref{eq:shallownn} as \eqref{eq:unified_architecture} is with
 \begin{equation*}
     A=\begin{pmatrix}0_{1\times M}&c_1&\cdots&c_J\end{pmatrix} \, , \qquad
     M=\begin{pmatrix}0_{J\times M}&I_J\end{pmatrix} \, , \qquad
